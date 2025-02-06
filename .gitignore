@@ -5,3 +5,57 @@ data
 .venv
 env
 pdf
+
+# Ignore Python compiled files
+__pycache__
+*.py[cod]
+*$py.class
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore virtual environments
+venv/
+.env/
+.venv/
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# Ignore Jupyter Notebook metadata
+*.nbconvert.ipynb
+*.nb.html
+
+# Ignore logs and temp files
+*.log
+*.tmp
+*.out
+*.bak
+*.swp
+*.swo
+*.DS_Store
+
+# Ignore IDE and editor files
+.vscode/
+.idea/
+*.iml
+
+# Ignore Black and autoformatting configs
+.black/
+.isort.cfg
+
+# Ignore pytest and coverage reports
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+*.pytest_cache/
+nosetests.xml
+test-reports/
+
+# Ignore Jupyter Notebook outputs
+**/.ipynb_checkpoints/
+**/*.nbconvert.ipynb
+**/*.nb.html

@@ -132,10 +132,11 @@ def calculate_vpin(df: pd.DataFrame, n: int, V: float):
         vpin = abs_diff / (n * V)  # Tính VPIN
 
         # Gap time cho vpin từ lúc bắt đầu vpin này đến khi bắt đầu vpin tiếp theo
-        gap_time, start_bucket_time = calculate_gap_vpin_time(df, start_bucket)
+        gap_time, start_bucket_time, end_bucket_time = calculate_gap_vpin_time(df, start_bucket)
         vpin_value.append(
             {
                 "start_bucket_time": start_bucket_time,
+                "end_bucket_time": end_bucket_time,
                 "vpin": vpin,
                 "gap_time": gap_time,
                 "start_bucket": start_bucket,
@@ -172,15 +173,29 @@ def calculate_gap_vpin_time(
     end_bucket_time = df_first_rows["Date"][1]
     gap_time = (end_bucket_time - start_bucket_time).total_seconds()
     # Loại bỏ giờ nghỉ trưa:
+    if gap_time == 177639:
+        print()
+
+    # # TODO: Cần xem lại phần logic này, logic đoạn này chưa được chặt chẽ
+    # # Sug: Cần xét cùng ngày hoặc khác ngày...
+    # # Giờ nghỉ cuối tuần, nghỉ lễ, nghỉ tết...
+
+    # if start_bucket_time.day == end_bucket_time.day:
     if start_bucket_time.hour < 11 or (
         start_bucket_time == 11 and start_bucket_time.minute < 30
     ):
         if end_bucket_time.hour >= 13:  # Trừ đi 1.5 tiếng nghỉ trưa
             gap_time = gap_time - (1.5 * 60 * 60)
-    elif start_bucket_time.hour == 14:
-        if end_bucket_time.hour < 14:  # Đã qua ngày hôm sau nên trừ đi 18 tiếng
-            gap_time = gap_time - (18 * 60 * 60)
-    return gap_time, start_bucket_time
+
+    elif end_bucket_time.hour < start_bucket_time.hour:
+        # if end_bucket_time.hour < 14:  # Đã qua ngày hôm sau hoặc từ thứ 6 đến thứ 2 nên trừ đi 18 tiếng hoặc là 66 tiếng
+            if (end_bucket_time - start_bucket_time).days==2: 
+                gap_time = gap_time - (66 * 60 * 60)
+            else:
+                gap_time = gap_time - (18 * 60 * 60)
+
+
+    return gap_time, start_bucket_time, end_bucket_time
 
 
 def calcualate_gap_time_faction_of_the_day(
