@@ -2,9 +2,10 @@ import pickle
 import os
 from pathlib import Path
 
-BASE_DIR = (os.path.join(os.path.dirname(os.path.abspath(__file__)),"../")) 
+BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")
 
-def load_data(folder = "tick"):
+
+def load_data(folder="tick"):
     if folder == "":
         file_path = os.path.join(BASE_DIR, f"data")
         folder_path = Path(file_path)
@@ -16,9 +17,10 @@ def load_data(folder = "tick"):
     data_dict = {}
     for filename in files:
         name, ext = os.path.splitext(filename)
-        with open(f"{folder_path}/{filename}", 'rb') as f:
+        with open(f"{folder_path}/{filename}", "rb") as f:
             data_dict[name] = pickle.load(f)
     return data_dict
 
-if __name__ == "__main__":  
-    load_data(folder = "")
+
+if __name__ == "__main__":
+    load_data(folder="")
