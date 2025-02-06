@@ -12,6 +12,10 @@ project_root/
 │   │-- module.py
 │-- README.md   # Hướng dẫn sử dụng
 ```
+## Bắt đầu từ file `code/data_analysis.ipynb`
+
+Bạn có thể bắt đầu quá trình phân tích dữ liệu bằng cách mở và chạy file `code/data_analysis.ipynb`. File này sẽ sử dụng các hàm cần thiết từ các file `.py` để xử lý và phân tích dữ liệu từ thư mục `data`.
+
 
 ## Lưu ý
 
