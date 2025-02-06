@@ -54,21 +54,24 @@ def calculate_V(df: pd.DataFrame,
     STB = df.copy()
     # Tạo cột Date_only theo ngày
     STB['Date_only'] = STB['Date'].dt.strftime('%Y-%m-%d')
-
+    """
     # trong một số trường hợp, việc thu thập dữ liệu của ngày đầu tiên không được bắt đầu lúc 0h,
     # trong trường hợp này là không được bắt đầu từ 9h00 sáng,
     # Do đó để đảm bảo tính đầy đủ của dữ liệu ta sẽ tính V từ giá trị của ngày thứ 2 của dữ liệu
-    
+    Tuy nhiên, có thể cập nhật cách tính V từ trung bình volume của toàn bộ dữ liệu hiện có: V = avg(KL)/n
+    - Lưu ý Nên loại bỏ ngày đầu tiên và ngày cuối cũng
+    """
+
     # Lấy Total của ngày thứ 2
     total_day2 = STB.groupby("Date_only", as_index=False).sum("KL").loc[1,"KL"]
 
     # Lấy ngày của dòng đầu tiên
     first_date = STB['Date_only'].iloc[0]
     # Lọc bỏ những dòng có ngày trùng với dòng đầu tiên
-    STB = STB[STB['Date_only'] != first_date]
+    STB = STB[STB['Date_only'] != first_date].reset_index()
     # Tính V:
     V = total_day2/n
-    return V
+    return V, STB
 
 def calculate_bucket_number(df: pd.DataFrame,
                             V: float,
@@ -94,25 +97,69 @@ def calculate_vpin(df: pd.DataFrame,
     if len(pre_vpin_df) < n:
         raise ValueError("Số lượng bucket nhỏ hơn n, không thể tính VPIN.")
     start_bucket = 1
-    end_bucket = 50
+    end_bucket = start_bucket + n - 1
     vpin_value = []
     max_bucket = max(pre_vpin_df["bucket_number"])
     while end_bucket <= max_bucket:
         window = pre_vpin_df[pre_vpin_df["bucket_number"].between(start_bucket, end_bucket)]
         abs_diff = (window["KL_ban"] - window["KL_mua"]).abs().sum()
-        VPIN = abs_diff / (n * V)  # Tính VPIN
+        vpin = abs_diff / (n * V)  # Tính VPIN
+
+        # Gap time cho vpin từ lúc bắt đầu vpin này đến khi bắt đầu vpin tiếp theo
+        gap_time, start_bucket_time = calculate_gap_vpin_time(df, start_bucket)
         vpin_value.append({
-            "VPIN": VPIN,
+            "start_bucket_time": start_bucket_time,
+            "vpin": vpin,
+            "gap_time": gap_time,
             "start_bucket": start_bucket,
-            "end_bucket": end_bucket
+            "end_bucket": end_bucket,
         })
         start_bucket += 1
         end_bucket += 1
+
     # Chấp nhận sai số 5% - Nếu bucket cuối cùng chưa cập nhật đủ thì loại bỏ:
-    if pre_vpin_df["KL"].to_list()[-1] <0.95*V:
+    if pre_vpin_df["KL"].to_list()[-1] < 0.95*V:
         vpin_value = vpin_value[0:-2]
     vpin_df = pd.DataFrame(vpin_value)
     return vpin_df
+
+def calculate_gap_vpin_time(
+        df: pd.DataFrame, # Đây là dataframe đã chia bucket_number
+        start_bucket: int,
+
+):
+    """
+    Vì thời gian giao dịch giữa các phiên có nghỉ (nghỉ trưa và nghỉ tối)
+    Nên chúng ta phải xử lý vấn đề này
+    """
+    # Lấy dữ liệu 
+    # Lấy dòng đầu tiên của start_bucket và dòng đầu tiên của bucket tiếp theo 
+    df_first_rows = df[df["bucket_number"].isin([start_bucket, start_bucket+1])].groupby("bucket_number").first().reset_index()
+    start_bucket_time = df_first_rows["Date"][0]
+    end_bucket_time = df_first_rows["Date"][1]
+    gap_time = (end_bucket_time - start_bucket_time).total_seconds()  
+    # Loại bỏ giờ nghỉ trưa:
+    if start_bucket_time.hour < 11 or (start_bucket_time ==11 and start_bucket_time.minute <30):
+        if end_bucket_time.hour >= 13: # Trừ đi 1.5 tiếng nghỉ trưa
+            gap_time = gap_time - (1.5*60*60)
+    elif start_bucket_time.hour == 14:
+        if end_bucket_time.hour < 14: # Đã qua ngày hôm sau nên trừ đi 18 tiếng
+            gap_time = gap_time - (18*60*60)
+    return gap_time, start_bucket_time
+
+def calcualate_gap_time_faction_of_the_day(
+                                    df: pd.DataFrame,
+                                    total_time_of_the_day: int = 16200,
+                                           ):
+    """
+    df là df sau khi tính vpin và gap time
+    total_time_of_the_day được tính theo giây là thời gian giao dịch của sàn chứng khoán ở Việt Nam:
+    - Sáng: Từ 9h00 đến 11h30,
+    - Chiều từ 1300 đến 15h00
+    Tổng là 270 phút = 16200 giây
+    """
+    df["gap_time_faction_of_the_day"] = df["gap_time"]/total_time_of_the_day
+    return df
 
 if __name__ == "__main__":
     from data_load import load_data
@@ -120,11 +167,13 @@ if __name__ == "__main__":
     data_orderbook = load_data(folder= "orderbook")
     # Chọn ra 1 loại cổ phiêú
     STB = transform_buy_sell_volume(data_orderbook)
-    # Tính V
-    V = calculate_V(STB)
+    # Tính V và loại bỏ ngày đầu tiên trong dữ liệu
+    V, STB = calculate_V(STB)
     # Chia bucket
     df = calculate_bucket_number(STB, V)
     # Chuẩn bị để tính Vpin
-    df = calculate_vpin(df,
+    vpin_df = calculate_vpin(df,
                         n = 50,
                         V = V)
+    # Tính Time gap faction of the day
+    vpin_df = calcualate_gap_time_faction_of_the_day(vpin_df)
