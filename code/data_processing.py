@@ -63,8 +63,12 @@ def transform_buy_sell_volume(
     # Merge lại data theo ngày làm tròn đến giây (cột Date) - Điền những giá trị không có = 0:
     STB = pd.merge(STB_sell, STB_buy, on="Date", how="outer").fillna(0)
 
+    # Tính giá bán trung bình
+    STB["Gia_Ban"] = (STB["Ban Gia 1"] + STB["Ban Gia 2"] + STB["Ban Gia 3"])/3
+    STB["Gia_Mua"] = (STB["Mua Gia 1"] + STB["Mua Gia 2"] + STB["Mua Gia 3"])/3
+
     # Chỉ giữ lại các cột: Date, KL_mua, KL_ban
-    STB = STB[["Date", "KL_mua", "KL_ban"]]
+    STB = STB[["Date", "Gia_Ban", "Gia_Mua", "KL_mua", "KL_ban"]]
     STB["KL"] = STB["KL_mua"] + STB["KL_ban"]
     return STB
 
