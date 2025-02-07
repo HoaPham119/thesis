@@ -57,8 +57,18 @@ def transform_buy_sell_volume(
     STB_buy["KL_mua"] = STB_buy["Mua KL 1"] + STB_buy["Mua KL 2"] + STB_buy["Mua KL 3"]
 
     # Groupby và tính sum theo thời gian bằng giây trước khi merge
-    STB_sell = STB_sell.groupby("Date", as_index=False).sum("KL_ban")
-    STB_buy = STB_buy.groupby("Date", as_index=False).sum("KL_mua")
+    STB_sell = STB_sell.groupby("Date", as_index=False).agg({
+        "KL_ban": "sum",
+        "Ban Gia 1": "mean",
+        "Ban Gia 2": "mean",
+        "Ban Gia 3": "mean",
+    })
+    STB_buy = STB_buy.groupby("Date", as_index=False).agg({
+        "KL_mua": "sum",
+        "Mua Gia 1": "mean",
+        "Mua Gia 2": "mean",
+        "Mua Gia 3": "mean",
+    })
 
     # Merge lại data theo ngày làm tròn đến giây (cột Date) - Điền những giá trị không có = 0:
     STB = pd.merge(STB_sell, STB_buy, on="Date", how="outer").fillna(0)
@@ -68,7 +78,7 @@ def transform_buy_sell_volume(
     STB["Gia_Mua"] = (STB["Mua Gia 1"] + STB["Mua Gia 2"] + STB["Mua Gia 3"])/3
 
     # Chỉ giữ lại các cột: Date, KL_mua, KL_ban
-    STB = STB[["Date", "Gia_Ban", "Gia_Mua", "KL_mua", "KL_ban"]]
+    STB = STB[["Date", "Gia_Ban", "Gia_Mua", "KL_ban", "KL_mua"]]
     STB["KL"] = STB["KL_mua"] + STB["KL_ban"]
     return STB
 
@@ -176,9 +186,6 @@ def calculate_gap_vpin_time(
     start_bucket_time = df_first_rows["Date"][0]
     end_bucket_time = df_first_rows["Date"][1]
     gap_time = (end_bucket_time - start_bucket_time).total_seconds()
-    # Loại bỏ giờ nghỉ trưa:
-    if gap_time == 177639:
-        print()
 
     # # TODO: Cần xem lại phần logic này, logic đoạn này chưa được chặt chẽ
     # # Sug: Cần xét cùng ngày hoặc khác ngày...
