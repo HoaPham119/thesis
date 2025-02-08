@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib.dates as mdates
+import numpy as np
+import seaborn as sns
 
 
 # Trong bài báo, phần này là hình minh hoạ cho E-mini S&P 500 futures  và Euro/U.S. dollar (EC1) futures
@@ -124,4 +126,14 @@ def visualize_vpin_and_gap_time(df: pd.DataFrame):
     # Điều chỉnh layout
     plt.xticks(rotation=45)
     plt.tight_layout()
+    plt.show()
+
+def visualize_price(price_df_scaled: pd.DataFrame):
+    data = np.random.normal(loc=0, scale=1, size=1000)
+    price_time_data = price_df_scaled["time"].dropna()
+    price_bucket_data = price_df_scaled["bucket"].dropna()
+    plt.figure(figsize = (8,6))
+    sns.kdeplot(price_time_data, color='red', fill=False)
+    sns.kdeplot(price_bucket_data, color='blue', fill=False)
+    sns.kdeplot(data, color='blue', fill=False)
     plt.show()

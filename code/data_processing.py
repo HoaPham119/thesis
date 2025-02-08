@@ -1,4 +1,7 @@
 import pandas as pd
+from datetime import timedelta
+
+from sklearn.preprocessing import MinMaxScaler
 
 
 def transform_avg_volume_hourly(data_dict, key1: str = "STB", key2: str = "SAB"):
@@ -223,12 +226,69 @@ def calcualate_gap_time_faction_of_the_day(
     df["gap_time_faction_of_the_day"] = df["gap_time"] / total_time_of_the_day
     return df
 
+def transform_price_data(data_dict: dict,
+                         key1: str="ACB"):
+    data = transform_buy_sell_volume(data_dict, key1)
+    V, STB = calculate_V(data, 50)
+    STB_day = calculate_bucket_number(STB, V)
+    # Thay thế giá trị 0 trong cột Gia_Ban bằng số khác 0 gần nhất
+    STB_day["Gia_Ban"] = STB_day["Gia_Ban"].replace(0, pd.NA).ffill().bfill()
+    # Nếu giờ lớn hơn hoặc bằng 13 thì ship về 1.5 tiếng (Để chia đều theo thời gian)
+    STB_day["Date"] = STB_day["Date"].apply(lambda _time: _time if _time.hour < 13 else (_time - timedelta(minutes = 90)))
+    # Xác định những ngày có trong df
+    day_list = STB_day["Date_only"].unique()
+
+    # Tính 50 mốc thời gian chia đều
+    # Mỗi ngày chia 50 khoảng
+    num_points = 50
+    # Luư thời gian trade khớp với thời gian chia đều
+    time_trades = []
+    for day in day_list:
+        # Ngày đang xét
+        df_tam = STB[STB["Date_only"] == day].reset_index()
+        nums_hours = df_tam["Date"].dt.hour.nunique()
+        # Nếu dữ liệu trong ngày đó không đủ thì có thể bỏ qua
+        if nums_hours < 4:
+            continue
+        # Tính bắt đầu từ 9h30 đến 1h00 (sau khi đã ship về 1.5 tiếng)
+        start_time = df_tam["Date"][0].replace(hour = 9, minute=30, second=0, microsecond=0)
+        end_time = df_tam["Date"][0].replace(hour = 13, minute=0, second=0, microsecond=0)
+        # Giờ thời gian chia đều trong ngày
+        time_step = [start_time + timedelta(seconds=i * (end_time - start_time).total_seconds() / (num_points - 1)) for i in range(num_points)]
+        time_trade = []
+        for _tg_deu in time_step:
+            tam = 10000000
+            for _tg_trade in df_tam["Date"]:
+                gap = abs((_tg_trade - _tg_deu).total_seconds())
+                if gap <= tam:
+                    min_time = _tg_trade
+                    tam = gap
+            time_trade.append(min_time)
+        time_trades.extend(time_trade)
+    # CHọn các dòng có dữ liệu theo thời gian đã được chia đều
+    STB_time = STB_day[STB_day["Date"].isin(time_trades)].reset_index(drop = True)
+    STB_time_price = STB_time["Gia_Ban"]
+    # Chọn các dòng bắt đầu của mỗi bucket
+    STB_bucket = STB_day.groupby("bucket_number").first().reset_index()
+    STB_bucket_price = STB_bucket["Gia_Ban"]
+    # Tạo df mới để scale dữ liệu về cùng range
+    price_df = pd.DataFrame()
+    price_df["STB_time_price"] = STB_time_price
+    price_df["STB_bucket_price"] = STB_bucket_price
+    # Scale dữ liệu
+    scaler = MinMaxScaler()
+    price_df_scaled = pd.DataFrame(scaler.fit_transform(price_df), columns = ["time", "bucket"])
+    # price_df_scaled.head()
+    return price_df_scaled
 
 if __name__ == "__main__":
-    from data_load import load_data
 
+    from data_load import load_data
     # Load data
     data_orderbook = load_data(folder="orderbook")
+    transform_price_data("ACB")
+
+    
     # Chọn ra 1 loại cổ phiêú
     STB = transform_buy_sell_volume(data_orderbook)
     # Tính V và loại bỏ ngày đầu tiên trong dữ liệu
