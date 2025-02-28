@@ -1,7 +1,6 @@
 import pandas as pd
-from datetime import timedelta
-
-from sklearn.preprocessing import MinMaxScaler
+from func import calc_vpin
+import numpy as np
 
 
 def transform_avg_volume_hourly(data_dict, key1: str = "STB", key2: str = "SAB"):
@@ -26,8 +25,8 @@ def transform_buy_sell_volume(
     # Sắp xếp data từ cũ nhất đến mới nhất
     STB = STB.sort_values(by="Date", ascending=True)  # Sắp xếp từ cũ -> mới
 
-    # Làm tròn cột Date theo giây
-    STB["Date"] = STB["Date"].dt.floor("s")
+    # Làm tròn cột Date theo phút
+    STB["Date"] = STB["Date"].dt.floor("T")
 
     # Phân loại dữ liệu theo mua và bán - Drop nan
     STB_sell = STB[
@@ -59,7 +58,7 @@ def transform_buy_sell_volume(
     )
     STB_buy["KL_mua"] = STB_buy["Mua KL 1"] + STB_buy["Mua KL 2"] + STB_buy["Mua KL 3"]
 
-    # Groupby và tính sum theo thời gian bằng giây trước khi merge
+    # Groupby và tính sum theo thời gian bằng phút trước khi merge
     STB_sell = STB_sell.groupby("Date", as_index=False).agg({
         "KL_ban": "sum",
         "Ban Gia 1": "mean",
@@ -73,7 +72,7 @@ def transform_buy_sell_volume(
         "Mua Gia 3": "mean",
     })
 
-    # Merge lại data theo ngày làm tròn đến giây (cột Date) - Điền những giá trị không có = 0:
+    # Merge lại data theo ngày làm tròn đến phút (cột Date) - Điền những giá trị không có = 0:
     STB = pd.merge(STB_sell, STB_buy, on="Date", how="outer").fillna(0)
 
     # Tính giá bán trung bình
@@ -83,91 +82,14 @@ def transform_buy_sell_volume(
     # Chỉ giữ lại các cột: Date, KL_mua, KL_ban
     STB = STB[["Date", "Gia_Ban", "Gia_Mua", "KL_ban", "KL_mua"]]
     STB["KL"] = STB["KL_mua"] + STB["KL_ban"]
-    return STB
+    
+    ## Dùng để 
+    STB_sample = STB[["Date", "Gia_Ban", "KL"]].copy()
+    STB_sample.rename(columns = {"Date":"Datetime", "Gia_Ban": "PRICE", "KL":"SIZE"}, inplace = True)
+    STB_sample.set_index("Datetime", inplace = True)
+    # Chỉ lấy giá trị đến phút
+    return STB, STB_sample
 
-
-def calculate_V(
-    df: pd.DataFrame,
-    n: int = 50,
-):
-    STB = df.copy()
-    # Tạo cột Date_only theo ngày
-    STB["Date_only"] = STB["Date"].dt.strftime("%Y-%m-%d")
-    """
-    # trong một số trường hợp, việc thu thập dữ liệu của ngày đầu tiên không được bắt đầu lúc 0h,
-    # trong trường hợp này là không được bắt đầu từ 9h00 sáng,
-    # Do đó để đảm bảo tính đầy đủ của dữ liệu ta sẽ tính V từ giá trị của ngày thứ 2 của dữ liệu
-    Tuy nhiên, có thể cập nhật cách tính V từ trung bình volume của toàn bộ dữ liệu hiện có: V = avg(KL)/n
-    - Lưu ý Nên loại bỏ ngày đầu tiên và ngày cuối cũng
-    """
-
-    # Lấy Total của ngày thứ 2
-    total_day2 = STB.groupby("Date_only", as_index=False).sum("KL").loc[1, "KL"]
-
-    # Lấy ngày của dòng đầu tiên
-    first_date = STB["Date_only"].iloc[0]
-    # Lọc bỏ những dòng có ngày trùng với dòng đầu tiên
-    STB = STB[STB["Date_only"] != first_date].reset_index()
-    # Tính V:
-    V = total_day2 / n
-    return V, STB
-
-
-def calculate_bucket_number(
-    df: pd.DataFrame,
-    V: float,
-):
-    df["bucket_number"] = 0
-    current_sum = 0
-    bucket_index = 1
-    for i in range(len(df)):
-        current_sum += df.loc[i, "KL"]
-        df.loc[i, "bucket_number"] = bucket_index  # Gán bucket hiện tại
-
-        if current_sum >= V:  # Khi đạt ngưỡng V, chuyển sang bucket mới
-            bucket_index += 1
-            current_sum = 0  # Reset tổng cho bucket tiếp theo
-    return df
-
-
-def calculate_vpin(df: pd.DataFrame, n: int, V: float):
-    pre_vpin_df = df.groupby("bucket_number", as_index=False).sum(
-        ["KL_mua", "KL_ban", "KL"]
-    )
-    # Kiểm tra nếu số bucket nhỏ hơn n (để tránh lỗi truy cập ngoài phạm vi)
-    if len(pre_vpin_df) < n:
-        raise ValueError("Số lượng bucket nhỏ hơn n, không thể tính VPIN.")
-    start_bucket = 1
-    end_bucket = start_bucket + n - 1
-    vpin_value = []
-    max_bucket = max(pre_vpin_df["bucket_number"])
-    while end_bucket <= max_bucket:
-        window = pre_vpin_df[
-            pre_vpin_df["bucket_number"].between(start_bucket, end_bucket)
-        ]
-        abs_diff = (window["KL_ban"] - window["KL_mua"]).abs().sum()
-        vpin = abs_diff / (n * V)  # Tính VPIN
-
-        # Gap time cho vpin từ lúc bắt đầu vpin này đến khi bắt đầu vpin tiếp theo
-        gap_time, start_bucket_time, end_bucket_time = calculate_gap_vpin_time(df, start_bucket)
-        vpin_value.append(
-            {
-                "start_bucket_time": start_bucket_time,
-                "end_bucket_time": end_bucket_time,
-                "vpin": vpin,
-                "gap_time": gap_time,
-                "start_bucket": start_bucket,
-                "end_bucket": end_bucket,
-            }
-        )
-        start_bucket += 1
-        end_bucket += 1
-
-    # Chấp nhận sai số 5% - Nếu bucket cuối cùng chưa cập nhật đủ thì loại bỏ:
-    if pre_vpin_df["KL"].to_list()[-1] < 0.95 * V:
-        vpin_value = vpin_value[0:-2]
-    vpin_df = pd.DataFrame(vpin_value)
-    return vpin_df
 
 
 def calculate_gap_vpin_time(
@@ -207,8 +129,6 @@ def calculate_gap_vpin_time(
                 gap_time = gap_time - (66 * 60 * 60)
             else:
                 gap_time = gap_time - (18 * 60 * 60)
-
-
     return gap_time, start_bucket_time, end_bucket_time
 
 
@@ -226,76 +146,38 @@ def calcualate_gap_time_faction_of_the_day(
     df["gap_time_faction_of_the_day"] = df["gap_time"] / total_time_of_the_day
     return df
 
-def transform_price_data(data_dict: dict,
-                         key1: str="ACB"):
-    data = transform_buy_sell_volume(data_dict, key1)
-    V, STB = calculate_V(data, 50)
-    STB_day = calculate_bucket_number(STB, V)
-    # Thay thế giá trị 0 trong cột Gia_Ban bằng số khác 0 gần nhất
-    STB_day["Gia_Ban"] = STB_day["Gia_Ban"].replace(0, pd.NA).ffill().bfill()
-    # Nếu giờ lớn hơn hoặc bằng 13 thì ship về 1.5 tiếng (Để chia đều theo thời gian)
-    STB_day["Date"] = STB_day["Date"].apply(lambda _time: _time if _time.hour < 13 else (_time - timedelta(minutes = 90)))
-    # Xác định những ngày có trong df
-    day_list = STB_day["Date_only"].unique()
-
-    # Tính 50 mốc thời gian chia đều
-    # Mỗi ngày chia 50 khoảng
-    num_points = 50
-    # Luư thời gian trade khớp với thời gian chia đều
-    time_trades = []
-    for day in day_list:
-        # Ngày đang xét
-        df_tam = STB[STB["Date_only"] == day].reset_index()
-        nums_hours = df_tam["Date"].dt.hour.nunique()
-        # Nếu dữ liệu trong ngày đó không đủ thì có thể bỏ qua
-        if nums_hours < 4:
-            continue
-        # Tính bắt đầu từ 9h30 đến 1h00 (sau khi đã ship về 1.5 tiếng)
-        start_time = df_tam["Date"][0].replace(hour = 9, minute=30, second=0, microsecond=0)
-        end_time = df_tam["Date"][0].replace(hour = 13, minute=0, second=0, microsecond=0)
-        # Giờ thời gian chia đều trong ngày
-        time_step = [start_time + timedelta(seconds=i * (end_time - start_time).total_seconds() / (num_points - 1)) for i in range(num_points)]
-        time_trade = []
-        for _tg_deu in time_step:
-            tam = 10000000
-            for _tg_trade in df_tam["Date"]:
-                gap = abs((_tg_trade - _tg_deu).total_seconds())
-                if gap <= tam:
-                    min_time = _tg_trade
-                    tam = gap
-            time_trade.append(min_time)
-        time_trades.extend(time_trade)
-    # CHọn các dòng có dữ liệu theo thời gian đã được chia đều
-    STB_time = STB_day[STB_day["Date"].isin(time_trades)].reset_index(drop = True)
-    STB_time_price = STB_time["Gia_Ban"]
-    # Chọn các dòng bắt đầu của mỗi bucket
-    STB_bucket = STB_day.groupby("bucket_number").first().reset_index()
-    STB_bucket_price = STB_bucket["Gia_Ban"]
-    # Tạo df mới để scale dữ liệu về cùng range
-    price_df = pd.DataFrame()
-    price_df["STB_time_price"] = STB_time_price
-    price_df["STB_bucket_price"] = STB_bucket_price
-    # Scale dữ liệu
-    scaler = MinMaxScaler()
-    price_df_scaled = pd.DataFrame(scaler.fit_transform(price_df), columns = ["time", "bucket"])
-    # price_df_scaled.head()
-    return price_df_scaled
 
 if __name__ == "__main__":
-
     from data_load import load_data
-    # Load data
-    data_orderbook = load_data(folder="orderbook")
-    transform_price_data("ACB")
 
+    # Khai báo biến
+    df={}; sec_trades = {}
+    sym = ['STB', 'SAB','MWG', 'VCB','TCB']
+
+    # # Load data
+    data_orderbook = load_data(folder="orderbook")
+
+    # Transform data
+    for s in sym:
+        sec_trades[s] = transform_buy_sell_volume(data_orderbook)[1]
     
-    # Chọn ra 1 loại cổ phiêú
-    STB = transform_buy_sell_volume(data_orderbook)
-    # Tính V và loại bỏ ngày đầu tiên trong dữ liệu
-    V, STB = calculate_V(STB)
-    # Chia bucket
-    df = calculate_bucket_number(STB, V)
-    # Chuẩn bị để tính Vpin
-    vpin_df = calculate_vpin(df, n=50, V=V)
-    # Tính Time gap faction of the day
-    vpin_df = calcualate_gap_time_faction_of_the_day(vpin_df)
+    # Cal vpin
+    volume = {'STB':300000,'SAB':100000,'MWG':200000,'VCB':1250000,'TCB':300000}
+    for s in sym:
+        print('Calculating VPIN')
+        df[s] = calc_vpin(sec_trades[s],volume[s],50)
+        print(s+' '+str(df[s].shape))
+
+    ## 
+    avg = pd.DataFrame()
+    print(avg.shape)
+    metric = 'CDF'
+    avg[metric] = np.nan
+    for stock,frame in df.items():
+        frame = frame[[metric]].reset_index().drop_duplicates(subset='Time', keep='last').set_index('Time')
+        avg = avg.merge(frame[[metric]],left_index=True,right_index=True,how='outer',suffixes=('',stock))
+        print(avg.shape)
+    avg = avg.dropna(axis=0,how='all').fillna(method='ffill')
+
+    avg.to_csv('CDF.csv')
+    

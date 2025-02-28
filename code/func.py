@@ -14,7 +14,6 @@ def get_buckets(df,bucketSize):
         if bucketSize < count + newVolume:
             BV = BV + (bucketSize-count)*z
             SV = SV + (bucketSize-count)*(1-z)
-
             # volumeBuckets = volumeBuckets.append({'Buy':BV, 'Sell':SV, 'Time':index},ignore_index=True)
             volumeBuckets = pd.concat([volumeBuckets, pd.DataFrame([{'Buy':BV, 'Sell':SV, 'Time':index}])],ignore_index=True)
             count = newVolume-(bucketSize-count)
