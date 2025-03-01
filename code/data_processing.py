@@ -153,16 +153,29 @@ if __name__ == "__main__":
     # Khai báo biến
     df={}; sec_trades = {}
     sym = ['STB', 'SAB','MWG', 'VCB','TCB']
+    # # # Load data
+    # data_orderbook = load_data(folder="orderbook")
 
-    # # Load data
-    data_orderbook = load_data(folder="orderbook")
+    ## Load data
+    data_tick = load_data(folder="tick")
 
     # Transform data
     for s in sym:
-        sec_trades[s] = transform_buy_sell_volume(data_orderbook)[1]
+        data = data_tick[s].copy()
+        data.rename(columns = {"Gia KL": "PRICE", "KL": "SIZE"}, inplace = True)
+        data.set_index("Date", inplace = True)
+        data = data.resample("T").agg({
+                'SIZE': 'sum',  # Cột volume tính tổng
+                'PRICE': 'mean'    # Cột price tính trung bình
+            })
+        sec_trades[s] = data
     
     # Cal vpin
-    volume = {'STB':300000,'SAB':100000,'MWG':200000,'VCB':1250000,'TCB':300000}
+    volume = {}
+    for key, val in sec_trades.items():
+        volume[key] = int(val['SIZE'].resample("D").sum().mean())
+        print()
+        
     for s in sym:
         print('Calculating VPIN')
         df[s] = calc_vpin(sec_trades[s],volume[s],50)
@@ -179,5 +192,8 @@ if __name__ == "__main__":
         print(avg.shape)
     avg = avg.dropna(axis=0,how='all').fillna(method='ffill')
 
+
     avg.to_csv('CDF.csv')
+
+
     
