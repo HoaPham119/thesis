@@ -68,3 +68,4 @@ doc/giayto
 
 # Ignore submodule
 .gitmodules
+VPIN_HFT
