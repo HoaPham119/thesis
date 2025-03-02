@@ -140,5 +140,14 @@ if __name__ == "__main__":
     avg = avg.dropna(axis=0,how='all').fillna(method='ffill')
 
     avg.to_csv('CDF.csv')
+    
+    fields = ['Time','CDFC','CDFBAC','CDFUSB','CDFJPM','CDFWFC']
+    df = pd.read_csv('CDF.csv',parse_dates=['Time'],index_col=[0],usecols = fields)
+
+    rolling_pariwise_corr = df.rolling(window=50).corr()
+
+    thres = pd.DataFrame()
+    thres['AvgCorrAssets'] = rolling_pariwise_corr.groupby(by=['Time']).sum().sum(axis=1)/((len(fields)-1)**2)
+    thres.to_csv('AvgCorrAssets.csv')
 
 
