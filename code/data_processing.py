@@ -83,12 +83,12 @@ def transform_buy_sell_volume(
     STB = STB[["Date", "Gia_Ban", "Gia_Mua", "KL_ban", "KL_mua"]]
     STB["KL"] = STB["KL_mua"] + STB["KL_ban"]
     
-    ## Dùng để 
-    STB_sample = STB[["Date", "Gia_Ban", "KL"]].copy()
-    STB_sample.rename(columns = {"Date":"Datetime", "Gia_Ban": "PRICE", "KL":"SIZE"}, inplace = True)
-    STB_sample.set_index("Datetime", inplace = True)
-    # Chỉ lấy giá trị đến phút
-    return STB, STB_sample
+    # ## Dùng để 
+    # STB_sample = STB[["Date", "Gia_Ban", "KL"]].copy()
+    # STB_sample.rename(columns = {"Date":"Datetime", "Gia_Ban": "PRICE", "KL":"SIZE"}, inplace = True)
+    # STB_sample.set_index("Datetime", inplace = True)
+    # # Chỉ lấy giá trị đến phút
+    return STB#, STB_sample
 
 
 
