@@ -103,6 +103,7 @@ def imbalance(sec_quotes):
     df_comb['avg_bid']=df_comb['avg_bid']*n1/df_comb['price_bid']
     df_comb['avg_ask']=df_comb['avg_ask']*n2/df_comb['price_ask']
     imbalance=df_comb['avg_bid']-df_comb['avg_ask']
+    imbalance = pd.DataFrame(imbalance).rename(columns = {0: "imbalance"})
     return imbalance
 
 
