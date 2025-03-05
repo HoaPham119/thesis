@@ -8,22 +8,20 @@ def get_buckets(df,bucketSize):
     count = 0
     BV = 0
     SV = 0
+    # Tính theo công thức số 7 trong bài báo
     for index,row in df.iterrows():
         newVolume = row['volume']
         z = row['z']
         if bucketSize < count + newVolume:
             BV = BV + (bucketSize-count)*z
             SV = SV + (bucketSize-count)*(1-z)
-            # volumeBuckets = volumeBuckets.append({'Buy':BV, 'Sell':SV, 'Time':index},ignore_index=True)
             volumeBuckets = pd.concat([volumeBuckets, pd.DataFrame([{'Buy':BV, 'Sell':SV, 'Time':index}])],ignore_index=True)
             count = newVolume-(bucketSize-count)
             if int(count/bucketSize) > 0:
                 for i in range(0,int(count/bucketSize)):
                     BV = (bucketSize)*z
                     SV = (bucketSize)*(1-z)
-                    # volumeBuckets = volumeBuckets.append({'Buy':BV, 'Sell':SV, 'Time':index},ignore_index=True)
                     volumeBuckets = pd.concat([volumeBuckets, pd.DataFrame([{'Buy':BV, 'Sell':SV, 'Time':index}])],ignore_index=True)
-
             count = count%bucketSize
             BV = (count)*z
             SV = (count)*(1-z)
@@ -36,18 +34,19 @@ def get_buckets(df,bucketSize):
     return volumeBuckets
 
 def calc_vpin(data, bucketSize,window):
-    volume = (data['SIZE']).fillna(0)
-    trades = (data['PRICE']).fillna(0)
+    # Không thể fillnan = 0 ở đây, vì sẽ làm tính sai diff() về sau
+    volume = (data['SIZE'])
+    trades = (data['PRICE'])
     
     trades_1min = trades.diff(1).resample('1min').sum().dropna()
     volume_1min = volume.resample('1min').sum().dropna()
     sigma = trades_1min.std()
-    z = trades_1min.apply(lambda x: norm.cdf(x/sigma))
+    z = trades_1min.apply(lambda x: norm.cdf(x/sigma)) # norm.cdf(...): Trả về xác suất tích luỹ của pp chuẩn tắc (mean = 0, var = 1)
     df = pd.DataFrame({'z': z, 'volume': volume_1min}).dropna()
     
     volumeBuckets=get_buckets(df,bucketSize)
     volumeBuckets['VPIN'] = abs(volumeBuckets['Buy']-volumeBuckets['Sell']).rolling(window).mean()/bucketSize
-    volumeBuckets['CDF'] = volumeBuckets['VPIN'].rank(pct=True)
+    volumeBuckets['CDF'] = volumeBuckets['VPIN'].rank(pct=True) #Trả về một Series chứa phân vị (giá trị từ 0 đến 1) của các giá trị trong cột VPIN
     
     return volumeBuckets
 
