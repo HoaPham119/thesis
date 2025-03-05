@@ -36,8 +36,8 @@ def get_buckets(df,bucketSize):
     return volumeBuckets
 
 def calc_vpin(data, bucketSize,window):
-    volume = (data['SIZE'])
-    trades = (data['PRICE'])
+    volume = (data['SIZE']).fillna(0)
+    trades = (data['PRICE']).fillna(0)
     
     trades_1min = trades.diff(1).resample('1min').sum().dropna()
     volume_1min = volume.resample('1min').sum().dropna()
