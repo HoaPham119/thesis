@@ -51,53 +51,50 @@ def calc_vpin(data, bucketSize,window):
     return volumeBuckets
 
 def imbalance(sec_quotes):
-    bids={}
-    bids_vol={}
-    asks={}
-    asks_vol={}
+    # bids={}
+    # bids_vol={}
+    # asks={}
+    # asks_vol={}
     sec_bids=sec_quotes[sec_quotes['BID']>0]
     sec_bids=sec_bids[sec_bids['BIDSIZ']>0]
     sec_asks=sec_quotes[sec_quotes['ASK']>0]
     sec_asks=sec_asks[sec_quotes['ASKSIZ']>0]
-    for ex in sec_quotes['EX'].unique():
-        bids[ex]=(sec_bids[sec_bids['EX']==ex]['BID'])
-        bids_vol[ex]=(sec_bids[sec_bids['EX']==ex]['BIDSIZ'])
+    bids=(sec_bids['BID'])
+    bids_vol=(sec_bids['BIDSIZ'])
 
-        asks[ex]=(sec_asks[sec_asks['EX']==ex]['ASK'])
-        asks_vol[ex]=(sec_asks[sec_asks['EX']==ex]['ASKSIZ'])
-
+    asks=(sec_asks['ASK'])
+    asks_vol=(sec_asks['ASKSIZ'])
     
     df_comb=pd.DataFrame()
-    for ex in sec_quotes['EX'].unique():
-        df=pd.DataFrame()
-        df1=pd.DataFrame()
-        bidquote_1min = bids[ex].resample('1min').last().ffill().fillna(0)
-        bidvol_1min = bids_vol[ex].resample('1min').last().ffill().fillna(0)
-        askquote_1min = asks[ex].resample('1min').last().ffill().fillna(0)
-        askvol_1min = asks_vol[ex].resample('1min').last().ffill().fillna(0)
-        df1=pd.concat([bidquote_1min, bidvol_1min,askquote_1min,askvol_1min], join='outer', axis=1)
-        df1=df1.ffill().fillna(0)
-        df['bprice_'+ex]=df1['BID']
-        df['bvol_'+ex]=df1['BIDSIZ']
-        df['aprice_'+ex]=df1['ASK']
-        df['avol_'+ex]=df1['ASKSIZ']
+    df=pd.DataFrame()
+    df1=pd.DataFrame()
+    bidquote_1min = bids.resample('1min').last().ffill().fillna(0)
+    bidvol_1min = bids_vol.resample('1min').last().ffill().fillna(0)
+    askquote_1min = asks.resample('1min').last().ffill().fillna(0)
+    askvol_1min = asks_vol.resample('1min').last().ffill().fillna(0)
+    df1=pd.concat([bidquote_1min, bidvol_1min,askquote_1min,askvol_1min], join='outer', axis=1)
+    df1=df1.ffill().fillna(0)
+    df['bprice']=df1['BID']
+    df['bvol']=df1['BIDSIZ']
+    df['aprice']=df1['ASK']
+    df['avol']=df1['ASKSIZ']
 
-        if df_comb.empty:
-            df_comb=df.copy()
-            df_comb['avg_bid']=df['bprice_'+ex]*df['bvol_'+ex]
-            df_comb['price_bid']=df['bprice_'+ex]
-            df_comb['avg_ask']=df['aprice_'+ex]*df['avol_'+ex]
-            df_comb['price_ask']=df['aprice_'+ex]
-            n1=df_comb['bprice_'+ex].apply(lambda x: int(x!=0))
-            n2=df_comb['aprice_'+ex].apply(lambda x: int(x!=0))
-        else:
-            df_comb=df_comb.merge(df, how='outer', right_index=True, left_index=True).ffill().fillna(0)
-            df_comb['avg_bid']=df_comb['avg_bid']+df_comb['bprice_'+ex]*df_comb['bvol_'+ex]
-            df_comb['price_bid']=df_comb['price_bid']+df_comb['bprice_'+ex]
-            df_comb['avg_ask']=df_comb['avg_ask']+df_comb['aprice_'+ex]*df_comb['avol_'+ex]
-            df_comb['price_ask']=df_comb['price_ask']+df_comb['aprice_'+ex]
-            n1=n1+df_comb['bprice_'+ex].apply(lambda x: int(x!=0))
-            n2=n2+df_comb['aprice_'+ex].apply(lambda x: int(x!=0))
+    if df_comb.empty:
+        df_comb=df.copy()
+        df_comb['avg_bid']=df['bprice']*df['bvol']
+        df_comb['price_bid']=df['bprice']
+        df_comb['avg_ask']=df['aprice']*df['avol']
+        df_comb['price_ask']=df['aprice']
+        n1=df_comb['bprice'].apply(lambda x: int(x!=0))
+        n2=df_comb['aprice'].apply(lambda x: int(x!=0))
+    else:
+        df_comb=df_comb.merge(df, how='outer', right_index=True, left_index=True).ffill().fillna(0)
+        df_comb['avg_bid']=df_comb['avg_bid']+df_comb['bprice']*df_comb['bvol']
+        df_comb['price_bid']=df_comb['price_bid']+df_comb['bprice']
+        df_comb['avg_ask']=df_comb['avg_ask']+df_comb['aprice']*df_comb['avol']
+        df_comb['price_ask']=df_comb['price_ask']+df_comb['aprice']
+        n1=n1+df_comb['bprice'].apply(lambda x: int(x!=0))
+        n2=n2+df_comb['aprice'].apply(lambda x: int(x!=0))
 
     df_comb['avg_bid']=df_comb['avg_bid']*n1/df_comb['price_bid']
     df_comb['avg_ask']=df_comb['avg_ask']*n2/df_comb['price_ask']
