@@ -51,10 +51,6 @@ def calc_vpin(data, bucketSize,window):
     return volumeBuckets
 
 def imbalance(sec_quotes):
-    # bids={}
-    # bids_vol={}
-    # asks={}
-    # asks_vol={}
     sec_bids=sec_quotes[sec_quotes['BID']>0]
     sec_bids=sec_bids[sec_bids['BIDSIZ']>0]
     sec_asks=sec_quotes[sec_quotes['ASK']>0]
@@ -79,22 +75,13 @@ def imbalance(sec_quotes):
     df['aprice']=df1['ASK']
     df['avol']=df1['ASKSIZ']
 
-    if df_comb.empty:
-        df_comb=df.copy()
-        df_comb['avg_bid']=df['bprice']*df['bvol']
-        df_comb['price_bid']=df['bprice']
-        df_comb['avg_ask']=df['aprice']*df['avol']
-        df_comb['price_ask']=df['aprice']
-        n1=df_comb['bprice'].apply(lambda x: int(x!=0))
-        n2=df_comb['aprice'].apply(lambda x: int(x!=0))
-    else:
-        df_comb=df_comb.merge(df, how='outer', right_index=True, left_index=True).ffill().fillna(0)
-        df_comb['avg_bid']=df_comb['avg_bid']+df_comb['bprice']*df_comb['bvol']
-        df_comb['price_bid']=df_comb['price_bid']+df_comb['bprice']
-        df_comb['avg_ask']=df_comb['avg_ask']+df_comb['aprice']*df_comb['avol']
-        df_comb['price_ask']=df_comb['price_ask']+df_comb['aprice']
-        n1=n1+df_comb['bprice'].apply(lambda x: int(x!=0))
-        n2=n2+df_comb['aprice'].apply(lambda x: int(x!=0))
+    df_comb=df.copy()
+    df_comb['avg_bid']=df['bprice']*df['bvol']
+    df_comb['price_bid']=df['bprice']
+    df_comb['avg_ask']=df['aprice']*df['avol']
+    df_comb['price_ask']=df['aprice']
+    n1=df_comb['bprice'].apply(lambda x: int(x!=0)) # Check True-False nhưng trả về số
+    n2=df_comb['aprice'].apply(lambda x: int(x!=0))
 
     df_comb['avg_bid']=df_comb['avg_bid']*n1/df_comb['price_bid']
     df_comb['avg_ask']=df_comb['avg_ask']*n2/df_comb['price_ask']
