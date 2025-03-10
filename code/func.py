@@ -71,46 +71,6 @@ def imbalance(sec_quotes):
     # Chỉ trả về cột imbalance dưới dạng DataFrame
     return df_resampled[['quote_imb']]
 
-# def imbalance(sec_quotes):
-#     sec_bids=sec_quotes[sec_quotes['BID']>0]
-#     sec_bids=sec_bids[sec_bids['BIDSIZ']>0]
-#     sec_asks=sec_quotes[sec_quotes['ASK']>0]
-#     sec_asks=sec_asks[sec_quotes['ASKSIZ']>0]
-#     bids=(sec_bids['BID'])
-#     bids_vol=(sec_bids['BIDSIZ'])
-
-#     asks=(sec_asks['ASK'])
-#     asks_vol=(sec_asks['ASKSIZ'])
-    
-#     df_comb=pd.DataFrame()
-#     df=pd.DataFrame()
-#     df1=pd.DataFrame()
-#     bidquote_1min = bids.resample('1min').last().ffill().fillna(0)
-#     bidvol_1min = bids_vol.resample('1min').last().ffill().fillna(0)
-#     askquote_1min = asks.resample('1min').last().ffill().fillna(0)
-#     askvol_1min = asks_vol.resample('1min').last().ffill().fillna(0)
-#     df1=pd.concat([bidquote_1min, bidvol_1min,askquote_1min,askvol_1min], join='outer', axis=1)
-#     df1=df1.ffill().fillna(0)
-#     df['bprice']=df1['BID']
-#     df['bvol']=df1['BIDSIZ']
-#     df['aprice']=df1['ASK']
-#     df['avol']=df1['ASKSIZ']
-
-#     df_comb=df.copy()
-#     df_comb['avg_bid']=df['bprice']*df['bvol']
-#     df_comb['price_bid']=df['bprice']
-#     df_comb['avg_ask']=df['aprice']*df['avol']
-#     df_comb['price_ask']=df['aprice']
-#     n1=df_comb['bprice'].apply(lambda x: int(x!=0)) # Check True-False nhưng trả về số
-#     n2=df_comb['aprice'].apply(lambda x: int(x!=0))
-
-#     df_comb['avg_bid']=df_comb['avg_bid']*n1/df_comb['price_bid']
-#     df_comb['avg_ask']=df_comb['avg_ask']*n2/df_comb['price_ask']
-#     imbalance=df_comb['avg_bid']-df_comb['avg_ask']
-#     imbalance = pd.DataFrame(imbalance).rename(columns = {0: "quote_imb"})
-#     return imbalance
-
-
 
 if __name__ == "__main__":
     # Khai báo biến
