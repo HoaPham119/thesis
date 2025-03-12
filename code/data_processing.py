@@ -15,74 +15,28 @@ def transform_avg_volume_hourly(data_dict, key1: str = "STB", key2: str = "SAB")
     return STB_avg_hourly, SAB_avg_hourly
 
 
-def transform_buy_sell_volume(
-    data_dict,
-    key1: str = "STB",
-):
-    # Lấy dữ liệu từ dictionary, sử dụng keys
-    STB = data_dict[key1]
-
-    # Sắp xếp data từ cũ nhất đến mới nhất
-    STB = STB.sort_values(by="Date", ascending=True)  # Sắp xếp từ cũ -> mới
-
-    # Làm tròn cột Date theo phút
+def transform_buy_sell_volume(data_dict, key1: str = "STB"):
+    STB = data_dict[key1].sort_values(by="Date").copy()
     STB["Date"] = STB["Date"].dt.floor("T")
+    
+    def process_side(STB, price_cols, volume_cols, volume_col_name):
+        return (STB[["Date"] + price_cols + volume_cols]
+                .dropna()
+                .assign(**{volume_col_name: STB[volume_cols].sum(axis=1)})
+                .groupby("Date", as_index=False)
+                .agg({volume_col_name: "sum", **{col: "mean" for col in price_cols}}))
+    
+    STB_sell = process_side(STB, ["Ban Gia 1", "Ban Gia 2", "Ban Gia 3"], ["Ban KL 1", "Ban KL 2", "Ban KL 3"], "KL_ban")
+    STB_buy = process_side(STB, ["Mua Gia 1", "Mua Gia 2", "Mua Gia 3"], ["Mua KL 1", "Mua KL 2", "Mua KL 3"], "KL_mua")
+    
+    STB = (pd.merge(STB_sell, STB_buy, on="Date", how="outer")
+             .fillna(0)
+             .assign(Gia_Ban=lambda x: x[["Ban Gia 1", "Ban Gia 2", "Ban Gia 3"]].mean(axis=1),
+                     Gia_Mua=lambda x: x[["Mua Gia 1", "Mua Gia 2", "Mua Gia 3"]].mean(axis=1),
+                     KL=lambda x: x["KL_mua"] + x["KL_ban"]))
+    
+    return STB[["Date", "Gia_Ban", "Gia_Mua", "KL_ban", "KL_mua", "KL"]]
 
-    # Phân loại dữ liệu theo mua và bán - Drop nan
-    STB_sell = STB[
-        [
-            "Date",
-            "Ban Gia 1",
-            "Ban Gia 2",
-            "Ban Gia 3",
-            "Ban KL 1",
-            "Ban KL 2",
-            "Ban KL 3",
-        ]
-    ].dropna()
-    STB_buy = STB[
-        [
-            "Date",
-            "Mua Gia 1",
-            "Mua Gia 2",
-            "Mua Gia 3",
-            "Mua KL 1",
-            "Mua KL 2",
-            "Mua KL 3",
-        ]
-    ].dropna()
-
-    # Tạo cột KL để Tính tổng giá trị mua và bán trong từng dòng
-    STB_sell["KL_ban"] = (
-        STB_sell["Ban KL 1"] + STB_sell["Ban KL 2"] + STB_sell["Ban KL 3"]
-    )
-    STB_buy["KL_mua"] = STB_buy["Mua KL 1"] + STB_buy["Mua KL 2"] + STB_buy["Mua KL 3"]
-
-    # Groupby và tính sum theo thời gian bằng phút trước khi merge
-    STB_sell = STB_sell.groupby("Date", as_index=False).agg({
-        "KL_ban": "sum",
-        "Ban Gia 1": "mean",
-        "Ban Gia 2": "mean",
-        "Ban Gia 3": "mean",
-    })
-    STB_buy = STB_buy.groupby("Date", as_index=False).agg({
-        "KL_mua": "sum",
-        "Mua Gia 1": "mean",
-        "Mua Gia 2": "mean",
-        "Mua Gia 3": "mean",
-    })
-
-    # Merge lại data theo ngày làm tròn đến phút (cột Date) - Điền những giá trị không có = 0:
-    STB = pd.merge(STB_sell, STB_buy, on="Date", how="outer").fillna(0)
-
-    # Tính giá bán trung bình
-    STB["Gia_Ban"] = (STB["Ban Gia 1"] + STB["Ban Gia 2"] + STB["Ban Gia 3"])/3
-    STB["Gia_Mua"] = (STB["Mua Gia 1"] + STB["Mua Gia 2"] + STB["Mua Gia 3"])/3
-
-    # Chỉ giữ lại các cột: Date, KL_mua, KL_ban
-    STB = STB[["Date", "Gia_Ban", "Gia_Mua", "KL_ban", "KL_mua"]]
-    STB["KL"] = STB["KL_mua"] + STB["KL_ban"]
-    return STB
 
 
 
