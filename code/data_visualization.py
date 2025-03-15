@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.dates as mdates
 import numpy as np
 import seaborn as sns
+import gc
 
 
 # Trong bài báo, phần này là hình minh hoạ cho E-mini S&P 500 futures  và Euro/U.S. dollar (EC1) futures
@@ -137,3 +138,67 @@ def visualize_price(price_df_scaled: pd.DataFrame):
     sns.kdeplot(price_bucket_data, color='blue', fill=False, legend="volume")
     sns.kdeplot(data, color='black', fill=False, legend="normal dist")
     plt.show()
+    
+
+def visualize_position_wealth(pos):
+    # Tạo hình ảnh lớn hơn để dễ nhìn
+    fig, ax = plt.subplots(figsize=(10, 5))  
+
+    # Vẽ biểu đồ với secondary_y
+    ax = pos[['position', 'wealth']].plot(secondary_y=['wealth'], ax=ax, linewidth=2)
+
+    # Đặt nhãn trục
+    ax.set_ylabel("Position", fontsize=12)
+    ax.right_ax.set_ylabel("Wealth", fontsize=12)
+    ax.set_xlabel("Time", fontsize=12)
+
+    # Đặt tiêu đề
+    ax.set_title("Position & Wealth Over Time", fontsize=14, fontweight="bold")
+
+    # Thêm grid
+    ax.grid(True, linestyle="--", alpha=0.6)
+
+    # Định dạng legend 
+    ax.legend(loc='upper left', bbox_to_anchor=(1.10, 1), title="Position")
+    ax.right_ax.legend(loc='upper left', bbox_to_anchor=(1.10, 0.85), title="Wealth")
+
+    # Định dạng trục x cho rõ ràng
+    if isinstance(pos.index, pd.DatetimeIndex):
+        ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%Y-%m-%d"))
+        plt.xticks(rotation=45)
+
+    # Hiển thị biểu đồ
+    plt.show()
+    
+# Tạo figure lớn hơn để nhìn rõ hơn
+def visualize_price_wealth(pos, name):
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Vẽ biểu đồ với secondary_y
+    ax = pos[[name, 'price']].plot(secondary_y=[name], ax=ax, linewidth=2)
+
+    # Thêm nhãn trục y
+    ax.set_ylabel("Price", fontsize=12, color="tab:blue")
+    ax.right_ax.set_ylabel("Wealth", fontsize=12, color="tab:orange")
+
+    # Thêm nhãn trục x
+    ax.set_xlabel("Time", fontsize=12)
+
+    # Đặt tiêu đề
+    ax.set_title(f"{name}", fontsize=14, fontweight="bold")
+
+    # Thêm grid giúp biểu đồ dễ đọc
+    ax.grid(True, linestyle="--", alpha=0.6)
+
+    # Định dạng legend đặt bên ngoài
+    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1), title="Price")
+    ax.right_ax.legend(loc='upper left', bbox_to_anchor=(1.1, 0.85), title="Wealth")
+
+    # Nếu index là thời gian, định dạng trục x để hiển thị đẹp hơn
+    if isinstance(pos.index, pd.DatetimeIndex):
+        ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%Y-%m-%d"))
+        plt.xticks(rotation=45)
+
+    # Hiển thị biểu đồ
+    plt.show()
+    gc.collect()
