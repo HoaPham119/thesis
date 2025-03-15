@@ -18,22 +18,22 @@ def transform_avg_volume_hourly(data_dict, key1: str = "STB", key2: str = "SAB")
 def transform_buy_sell_volume(data_dict, key1: str = "STB"):
     STB = data_dict[key1].sort_values(by="Date").copy()
     STB["Date"] = STB["Date"].dt.floor("T")
-    
+
     def process_side(STB, price_cols, volume_cols, volume_col_name):
         return (STB[["Date"] + price_cols + volume_cols]
                 .dropna()
                 .assign(**{volume_col_name: STB[volume_cols].sum(axis=1)})
                 .groupby("Date", as_index=False)
                 .agg({volume_col_name: "sum", **{col: "mean" for col in price_cols}}))
-    
+
     STB_sell = process_side(STB, ["Ban Gia 1", "Ban Gia 2", "Ban Gia 3"], ["Ban KL 1", "Ban KL 2", "Ban KL 3"], "KL_ban")
     STB_buy = process_side(STB, ["Mua Gia 1", "Mua Gia 2", "Mua Gia 3"], ["Mua KL 1", "Mua KL 2", "Mua KL 3"], "KL_mua")
-    
+
     STB = (pd.merge(STB_sell, STB_buy, on="Date", how="outer")
-             .fillna(0)
-             .assign(Gia_Ban=lambda x: x[["Ban Gia 1", "Ban Gia 2", "Ban Gia 3"]].mean(axis=1),
-                     Gia_Mua=lambda x: x[["Mua Gia 1", "Mua Gia 2", "Mua Gia 3"]].mean(axis=1),
-                     KL=lambda x: x["KL_mua"] + x["KL_ban"]))
+                .fillna(0)
+                .assign(Gia_Ban=lambda x: x[["Ban Gia 1", "Ban Gia 2", "Ban Gia 3"]].mean(axis=1),
+                        Gia_Mua=lambda x: x[["Mua Gia 1", "Mua Gia 2", "Mua Gia 3"]].mean(axis=1),
+                        KL=lambda x: x["KL_mua"] + x["KL_ban"]))
     
     return STB[["Date", "Gia_Ban", "Gia_Mua", "KL_ban", "KL_mua", "KL"]]
 
