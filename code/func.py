@@ -59,14 +59,21 @@ def imbalance(sec_quotes):
                             (sec_quotes['ASK'] > 0) & (sec_quotes['ASKSIZ'] > 0)]
     
     # Resample theo từng phút, lấy giá trị cuối cùng
-    df_resampled = sec_quotes.resample('1min').last().ffill().fillna(0)
+    # df_resampled = sec_quotes.resample('1min').last()#.ffill().fillna(0)
+    df_resampled = sec_quotes.resample('1min').agg({
+    "BID": "mean",        # Lấy giá BID trung bình mỗi phút
+    "ASK": "mean",        # Lấy giá ASK trung bình mỗi phút
+    "BIDSIZ": "sum",      # Tổng khối lượng BID mỗi phút
+    "ASKSIZ": "sum"       # Tổng khối lượng ASK mỗi phút
+})
+    df_resampled.dropna(how = "any", inplace = True)
     
-    # Lấy giá và khối lượng đặt mua/bán sau resample
-    bid_vol = df_resampled['BIDSIZ']
-    ask_vol = df_resampled['ASKSIZ']
+    # # Lấy giá và khối lượng đặt mua/bán sau resample
+    # bid_vol = df_resampled['BIDSIZ']
+    # ask_vol = df_resampled['ASKSIZ']
 
     # Tính toán imbalance trực tiếp từ volume
-    df_resampled['quote_imb'] = bid_vol - ask_vol
+    df_resampled['quote_imb'] = df_resampled['BIDSIZ'] - df_resampled['ASKSIZ']
 
     # Chỉ trả về cột imbalance dưới dạng DataFrame
     return df_resampled[['quote_imb']]
