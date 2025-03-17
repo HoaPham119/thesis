@@ -3,8 +3,9 @@ import yfinance as yf
 import pandas as pd
 from scipy.stats import norm
 
+    
 def get_buckets(df,bucketSize):
-    volumeBuckets = pd.DataFrame(columns=['Buy','Sell','Time'])
+    volumeBuckets = []
     count = 0
     BV = 0
     SV = 0
@@ -15,13 +16,13 @@ def get_buckets(df,bucketSize):
         if bucketSize < count + newVolume:
             BV = BV + (bucketSize-count)*z
             SV = SV + (bucketSize-count)*(1-z)
-            volumeBuckets = pd.concat([volumeBuckets, pd.DataFrame([{'Buy':BV, 'Sell':SV, 'Time':index}])],ignore_index=True)
+            volumeBuckets.append({'Buy':BV, 'Sell':SV, 'Time':index})
             count = newVolume-(bucketSize-count)
             if int(count/bucketSize) > 0:
                 for i in range(0,int(count/bucketSize)):
                     BV = (bucketSize)*z
                     SV = (bucketSize)*(1-z)
-                    volumeBuckets = pd.concat([volumeBuckets, pd.DataFrame([{'Buy':BV, 'Sell':SV, 'Time':index}])],ignore_index=True)
+                    volumeBuckets.append({'Buy':BV, 'Sell':SV, 'Time':index})
             count = count%bucketSize
             BV = (count)*z
             SV = (count)*(1-z)
@@ -29,8 +30,7 @@ def get_buckets(df,bucketSize):
             BV = BV + (newVolume)*z
             SV = SV + (newVolume)*(1-z)
             count = count + newVolume
-
-    volumeBuckets = volumeBuckets.set_index('Time')
+    volumeBuckets = pd.DataFrame(volumeBuckets).set_index('Time')
     return volumeBuckets
 
 def calc_vpin(data, bucketSize,window):
@@ -59,7 +59,6 @@ def imbalance(sec_quotes):
                             (sec_quotes['ASK'] > 0) & (sec_quotes['ASKSIZ'] > 0)]
     
     # Resample theo từng phút, lấy giá trị cuối cùng
-    # df_resampled = sec_quotes.resample('1min').last()#.ffill().fillna(0)
     df_resampled = sec_quotes.resample('1min').agg({
     "BID": "mean",        # Lấy giá BID trung bình mỗi phút
     "ASK": "mean",        # Lấy giá ASK trung bình mỗi phút
@@ -67,10 +66,6 @@ def imbalance(sec_quotes):
     "ASKSIZ": "sum"       # Tổng khối lượng ASK mỗi phút
 })
     df_resampled.dropna(how = "any", inplace = True)
-    
-    # # Lấy giá và khối lượng đặt mua/bán sau resample
-    # bid_vol = df_resampled['BIDSIZ']
-    # ask_vol = df_resampled['ASKSIZ']
 
     # Tính toán imbalance trực tiếp từ volume
     df_resampled['quote_imb'] = df_resampled['BIDSIZ'] - df_resampled['ASKSIZ']
