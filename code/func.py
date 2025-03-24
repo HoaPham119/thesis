@@ -51,8 +51,6 @@ def calc_vpin(data, bucketSize,window):
     return volumeBuckets
 
 
-import pandas as pd
-
 def imbalance(sec_quotes):
     # Lọc các dòng có giá và khối lượng hợp lệ
     sec_quotes = sec_quotes[(sec_quotes['BID'] > 0) & (sec_quotes['BIDSIZ'] > 0) &
