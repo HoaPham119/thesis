@@ -65,6 +65,7 @@ test-reports/
 
 # Ignore đơn từ
 doc/giayto
+doc/DeCuong
 
 # Ignore submodule
 .gitmodules
