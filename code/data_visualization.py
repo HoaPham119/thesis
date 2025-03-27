@@ -4,6 +4,8 @@ import matplotlib.dates as mdates
 import numpy as np
 import seaborn as sns
 import gc
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
 # Trong bài báo, phần này là hình minh hoạ cho E-mini S&P 500 futures  và Euro/U.S. dollar (EC1) futures
@@ -141,40 +143,44 @@ def visualize_price(price_df_scaled: pd.DataFrame):
     
 
 def visualize_position_wealth(pos):
-    # Tạo hình ảnh lớn hơn để dễ nhìn
-    fig, ax = plt.subplots(figsize=(10, 5))  
+    fig = go.Figure()
+    # Vẽ Position (Trục trái)
+    fig.add_trace(go.Scatter(
+        x=pos.index, y=pos['position'],
+        mode='lines+markers', name='Position',
+        line=dict(color='blue'),
+        connectgaps=False  # Không nối khoảng trống
+    ))
 
-    # Vẽ biểu đồ với secondary_y
-    ax = pos[['position', 'wealth']].plot(secondary_y=['wealth'], ax=ax, linewidth=2)
+    # Vẽ Wealth (Trục phải)
+    fig.add_trace(go.Scatter(
+        x=pos.index, y=pos['wealth'],
+        mode='lines+markers', name='Wealth',
+        line=dict(color='orange'),
+        yaxis='y2', connectgaps=False  # Không nối khoảng trống
+    ))
 
-    # Đặt nhãn trục
-    ax.set_ylabel("Position", fontsize=12)
-    ax.right_ax.set_ylabel("Wealth", fontsize=12)
-    ax.set_xlabel("Time", fontsize=12)
+    # Cấu hình layout
+    fig.update_layout(
+        title="Position & Wealth Over Time",
+        xaxis=dict(title="Time"),
+        yaxis=dict(
+            title="Position",
+            tickfont=dict(color="blue")  # Chỉnh màu chữ của tick trên trục y
+        ),
+        yaxis2=dict(
+            title="Wealth",
+            tickfont=dict(color="orange"),
+            overlaying='y', side='right'
+        ),
+        legend=dict(x=1.1, y=1),
+        template="plotly_white"
+    )
 
-    # Đặt tiêu đề
-    ax.set_title("Position & Wealth Over Time", fontsize=14, fontweight="bold")
-
-    # Thêm grid
-    ax.grid(True, linestyle="--", alpha=0.6)
-
-    # Định dạng legend 
-    ax.legend(loc='upper left', bbox_to_anchor=(1.10, 1), title="Position")
-    ax.right_ax.legend(loc='upper left', bbox_to_anchor=(1.10, 0.85), title="Wealth")
-
-    # Định dạng trục x cho rõ ràng
-    if isinstance(pos.index, pd.DatetimeIndex):
-        ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%Y-%m-%d"))
-        plt.xticks(rotation=45)
-
-    # Hiển thị biểu đồ
-    plt.show()
+    fig.show()
     
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+
 
 def visualize_price_wealth(pos, name):
     fig = make_subplots(specs=[[{"secondary_y": True}]])
