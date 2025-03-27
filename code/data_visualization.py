@@ -170,35 +170,39 @@ def visualize_position_wealth(pos):
     # Hiển thị biểu đồ
     plt.show()
     
-# Tạo figure lớn hơn để nhìn rõ hơn
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 def visualize_price_wealth(pos, name):
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # Vẽ biểu đồ với secondary_y
-    ax = pos[[name, 'price']].plot(secondary_y=[name], ax=ax, linewidth=2)
+    # Thêm đường giá (Price) - Trục y trái
+    fig.add_trace(
+        go.Scatter(x=pos.index, y=pos['price'], 
+                   name="Price", line=dict(color="blue", width=2)),
+        secondary_y=False,
+    )
 
-    # Thêm nhãn trục y
-    ax.set_ylabel("Price", fontsize=12, color="tab:blue")
-    ax.right_ax.set_ylabel("Wealth", fontsize=12, color="tab:orange")
+    # Thêm đường tài sản (Wealth) - Trục y phải
+    fig.add_trace(
+        go.Scatter(x=pos.index, y=pos[name], 
+                   name="Wealth", line=dict(color="orange", width=2)),
+        secondary_y=True,
+    )
 
-    # Thêm nhãn trục x
-    ax.set_xlabel("Time", fontsize=12)
-
-    # Đặt tiêu đề
-    ax.set_title(f"{name}", fontsize=14, fontweight="bold")
-
-    # Thêm grid giúp biểu đồ dễ đọc
-    ax.grid(True, linestyle="--", alpha=0.6)
-
-    # Định dạng legend đặt bên ngoài
-    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1), title="Price")
-    ax.right_ax.legend(loc='upper left', bbox_to_anchor=(1.1, 0.85), title="Wealth")
-
-    # Nếu index là thời gian, định dạng trục x để hiển thị đẹp hơn
-    if isinstance(pos.index, pd.DatetimeIndex):
-        ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%Y-%m-%d"))
-        plt.xticks(rotation=45)
+    # Cấu hình trục
+    fig.update_layout(
+        title=dict(text=name, font=dict(size=16, family="Arial", color="black")),
+        xaxis=dict(title="Time"),
+        yaxis=dict(title=dict(text="Price", font=dict(color="blue")), tickfont=dict(color="blue")),
+        yaxis2=dict(title=dict(text="Wealth", font=dict(color="orange")), tickfont=dict(color="orange"), overlaying='y', side='right'),
+        legend=dict(x=1.1, y=1),
+        template="plotly_white"
+    )
 
     # Hiển thị biểu đồ
-    plt.show()
-    gc.collect()
+    fig.show()
+
