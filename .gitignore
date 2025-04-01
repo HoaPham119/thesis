@@ -70,3 +70,4 @@ doc/DeCuong
 # Ignore submodule
 .gitmodules
 VPIN_HFT
+models/
