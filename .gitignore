@@ -71,3 +71,4 @@ doc/DeCuong
 .gitmodules
 VPIN_HFT
 models/
+plots/
