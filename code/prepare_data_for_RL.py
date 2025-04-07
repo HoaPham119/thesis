@@ -4,6 +4,7 @@ import pandas as pd
 from scipy.stats import norm
 import os
 from data_load import load_data
+from sklearn.preprocessing import MinMaxScaler
 
 def get_buckets(df, bucketSize):
     volumeBuckets = []
@@ -62,6 +63,7 @@ def calc_vpin(data, bucketSize, window):
     return volumeBuckets
 
 if __name__ == "__main__":
+    scaler = MinMaxScaler()
     # Đường dẫn tới thư mục cần kiểm tra
     folder_path = "RL_data"
     # Kiểm tra nếu thư mục chưa tồn tại thì tạo mới
@@ -101,5 +103,7 @@ if __name__ == "__main__":
     for s in sym:
         print('Calculating VPIN')
         df[s] = calc_vpin(sec_trades[s],volume[s],50)
+        df[s][['Price_scaled', 'VPIN_scaled']] = scaler.fit_transform(df[s][['Price', 'VPIN']])
+        
         df[s].to_csv(f"{folder_path}/{s}VPIN.csv",index = True)
         print(s+' '+str(df[s].shape))
