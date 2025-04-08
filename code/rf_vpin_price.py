@@ -5,6 +5,7 @@ import math
 import random
 from collections import deque
 import os
+from sklearn.preprocessing import MinMaxScaler
 
 import torch
 import torch.nn as nn
@@ -12,15 +13,24 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 # Helper Functions
-def formatPrice(n):
-    return ("-$" if n < 0 else "$") + "{0:.2f}".format(abs(n))
+def formatPrice(n, scaler):
+    # Get Price and inverse_transform
+    price = scaler.inverse_transform([n])[0][0]
+    return ("-$" if price < 0 else "$") + "{0:.2f}".format(abs(price))
 
 def sigmoid(x):
-    return 1 / (1 + math.exp(-x))
+    """
+    Đầu ra của hàm sigmoid luôn nằm trong khoảng (0, 1).
+    Khi x → ∞, sigmoid(x) → 1.
+    Khi x → -∞, sigmoid(x) → 0.
+    Khi x = 0, sigmoid(0) = 0.5.
+    """
+    return 1 / (1 + math.exp(-x)) 
 
 def getState(data, t, n):
     """
     Returns an n-day state representation ending at time t
+    Using Price and VPIN as input feature
     """
     d = t - n + 1
     block = []
@@ -32,7 +42,11 @@ def getState(data, t, n):
         block = data[d:t + 1]
     
     res = []
-    # Calculate price differences and apply sigmoid
+    # # Calculate price differences and apply sigmoid
+    # for i in range(len(block) - 1):
+    #     diff = np.array(block[i + 1]) - np.array(block[i])  # hiệu từng thành phần
+    #     res.extend([sigmoid(x) for x in diff])   
+        
     for i in range(len(block) - 1):
         res.append(sigmoid(block[i + 1] - block[i]))
     
@@ -175,7 +189,8 @@ class Agent:
 def main():
     # Load data
     try:
-        dataset = pd.read_csv('data/SP500.csv', index_col=0)
+        dataset = pd.read_csv('RL_data/VCBVPIN.csv', index_col=0)
+        dataset = dataset.dropna()
     except FileNotFoundError:
         print("Data file not found. Please ensure the SP500.csv file is in the 'data' directory.")
         return
@@ -189,14 +204,22 @@ def main():
         os.makedirs('models')
     
     # Prepare data
-    close_prices = dataset['Close'].values
-    
+    close = dataset['Price'].values
+    vpin = dataset["VPIN"].values
+    all_data = list(zip(close, vpin))
+    all_data = np.array(all_data) 
     # Split data into training and testing sets
-    train_size = int(len(close_prices) * 0.8)
-    train_data = close_prices[:train_size]
-    test_data = close_prices[train_size:]
+    train_size = int(len(all_data) * 0.8)
     
-    print(f"Data loaded: {len(close_prices)} total points")
+    train_data = all_data[:train_size]
+    test_data = all_data[train_size:]
+    
+    # Fit scale data
+    scaler = MinMaxScaler()
+    train_data = scaler.fit_transform(train_data)
+    test_data  = scaler.transform(test_data)
+    
+    print(f"Data loaded: {len(all_data)} total points")
     print(f"Training data: {len(train_data)} points")
     print(f"Testing data: {len(test_data)} points")
     
@@ -216,6 +239,7 @@ def main():
         
         for e in range(episodes):
             print(f"Running episode {e+1}/{episodes}")
+            
             state = getState(data, 0, window_size + 1)
             total_profit = 0
             agent.inventory = []
@@ -235,13 +259,15 @@ def main():
 
                 if action == 1: # buy
                     agent.inventory.append(data[t])
-                    print(f"Step {t}: Buy: {formatPrice(data[t])}")
+                    print(f"Step {t}: Buy: {formatPrice(data[t], scaler)}")
                 
                 elif action == 2 and len(agent.inventory) > 0: # sell
                     bought_price = agent.inventory.pop(0)
-                    reward = max(data[t] - bought_price, 0)
-                    total_profit += data[t] - bought_price
-                    print(f"Step {t}: Sell: {formatPrice(data[t])} | Profit: {formatPrice(data[t] - bought_price)}")
+                    bought_price = scaler.inverse_transform([bought_price])[0][0]
+                    data_t = scaler.inverse_transform([data[t]])[0][0]
+                    reward = max(data_t - bought_price, 0)
+                    total_profit += data_t - bought_price
+                    print(f"Step {t}: Sell: {formatPrice(data[t], scaler)} | Profit: {formatPrice(data[t] - bought_price, scaler)}")
                 
                 done = True if t == l - 1 else False
                 agent.memory.append((state, action, reward, next_state, done))
@@ -250,7 +276,7 @@ def main():
                 if done:
                     print("##############")
                     print(f"Episode {e+1} completed")
-                    print(f"Total Profit: {formatPrice(total_profit)}")
+                    print(f"Total Profit: {formatPrice(total_profit, scaler)}")
                     print(f"Final epsilon: {agent.epsilon:.4f}")
                     print("##############")
                 
@@ -303,14 +329,14 @@ def main():
             if action == 1: # buy
                 agent.inventory.append(data[t])
                 states_buy.append(t)
-                print(f"Step {t}: Buy: {formatPrice(data[t])}")
+                print(f"Step {t}: Buy: {formatPrice(data[t], scaler)}")
             
             elif action == 2 and len(agent.inventory) > 0: # sell
                 bought_price = agent.inventory.pop(0)
                 reward = max(data[t] - bought_price, 0)
                 total_profit += data[t] - bought_price
                 states_sell.append(t)
-                print(f"Step {t}: Sell: {formatPrice(data[t])} | Profit: {formatPrice(data[t] - bought_price)}")
+                print(f"Step {t}: Sell: {formatPrice(data[t], scaler)} | Profit: {formatPrice(data[t] - bought_price, scaler)}")
             
             state = next_state
             
@@ -319,7 +345,7 @@ def main():
                 print(f"Progress: {t}/{l} steps completed in evaluation")
         
         print("------------------------------------------")
-        print(f"Total Profit: {formatPrice(total_profit)}")
+        print(f"Total Profit: {formatPrice(total_profit), scaler}")
         print(f"Total Buy actions: {len(states_buy)}")
         print(f"Total Sell actions: {len(states_sell)}")
         print("------------------------------------------")
@@ -345,7 +371,7 @@ def main():
             save_plot = (save_plot_choice == 'y')
             profit, states_buy, states_sell = evaluate_model(test_data, window_size, model_name, save_plot)
             print(f"Model trained and evaluated successfully!")
-            print(f"Total profit on test data: {formatPrice(profit)}")
+            print(f"Total profit on test data: {formatPrice(profit, scaler)}")
     
     elif choice == 'e':
         # Allow selecting a specific epoch model
@@ -378,7 +404,7 @@ def main():
         save_plot = (save_plot_choice == 'y')
         profit, states_buy, states_sell = evaluate_model(test_data, window_size, selected_model, save_plot)
         print(f"Model evaluated successfully!")
-        print(f"Total profit on test data: {formatPrice(profit)}")
+        print(f"Total profit on test data: {formatPrice(profit, scaler)}")
     
     else:
         print("Invalid choice. Please run the script again and enter 't' for training or 'e' for evaluation.")
