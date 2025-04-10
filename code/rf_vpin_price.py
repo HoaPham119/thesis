@@ -6,7 +6,6 @@ import random
 from collections import deque
 import os
 from sklearn.preprocessing import MinMaxScaler
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,47 +13,41 @@ import torch.nn.functional as F
 
 # Helper Functions
 def formatPrice(n, scaler):
-    # Get Price and inverse_transform
-    price = scaler.inverse_transform([n])[0][0]
+    price = np.array([[n,0]])
+    price = scaler.inverse_transform(price)[0][0]
     return ("-$" if price < 0 else "$") + "{0:.2f}".format(abs(price))
 
 def sigmoid(x):
-    """
-    Đầu ra của hàm sigmoid luôn nằm trong khoảng (0, 1).
-    Khi x → ∞, sigmoid(x) → 1.
-    Khi x → -∞, sigmoid(x) → 0.
-    Khi x = 0, sigmoid(0) = 0.5.
-    """
-    return 1 / (1 + math.exp(-x)) 
+    return 1 / (1 + math.exp(-x))
 
 def getState(data, t, n):
     """
     Returns an n-day state representation ending at time t
-    Using Price and VPIN as input feature
     """
     d = t - n + 1
     block = []
     
     # Pad with t0 if d < 0
     if d < 0:
-        block = np.array([-d * [data[0]] + list(data[0:t + 1])])
+        block = np.array([[-d * [data[0]] + list(data[0:t + 1])]])
     else:
         block = data[d:t + 1]
     
     res = []
-    # # Calculate price differences and apply sigmoid
-    # for i in range(len(block) - 1):
-    #     diff = np.array(block[i + 1]) - np.array(block[i])  # hiệu từng thành phần
-    #     res.extend([sigmoid(x) for x in diff])   
-        
+    # Calculate differences and apply sigmoid to each feature (Price, VPIN)
     for i in range(len(block) - 1):
-        res.append(sigmoid(block[i + 1] - block[i]))
+        # Price difference (block[i+1][0] is the price, block[i][0] is the previous price)
+        price_diff = block[i + 1][0] - block[i][0]
+        # VPIN difference (block[i+1][1] is the VPIN, block[i][1] is the previous VPIN)
+        vpin_diff = block[i + 1][1] - block[i][1]
+        res.append(sigmoid(price_diff))  # Apply sigmoid to price difference
+        res.append(sigmoid(vpin_diff))  # Apply sigmoid to VPIN difference
     
-    # Ensure we have n-1 elements in our state
-    while len(res) < n - 1:
+    # Ensure we have n*2 - 2 elements in our state (since we have two features: Price, VPIN)
+    while len(res) < n * 2 - 2:
         res.append(0)
     
-    # Return as a 1 x (n-1) array
+    # Return as a 1 x (n*2 - 2) array
     return np.array([res])
 
 def plot_behavior(data_input, states_buy, states_sell, profit, save_plot=False, filename=None):
@@ -62,12 +55,20 @@ def plot_behavior(data_input, states_buy, states_sell, profit, save_plot=False, 
     if save_plot and not os.path.exists('plots'):
         os.makedirs('plots')
         
-    fig = plt.figure(figsize = (15,5))
-    plt.plot(data_input, color='r', lw=2.)
-    plt.plot(data_input, '^', markersize=10, color='m', label = 'Buying signal', markevery = states_buy)
-    plt.plot(data_input, 'v', markersize=10, color='k', label = 'Selling signal', markevery = states_sell)
-    plt.title('Total gains: %f'%(profit))
+    fig = plt.figure(figsize=(15, 5))
+
+    # Vẽ đường Price và VPIN
+    plt.plot(data_input[:, 0], color='r', lw=2., label='Price')
+    plt.plot(data_input[:, 1], color='b', lw=2., label='VPIN')
+
+    # Vẽ các tín hiệu mua/bán trên giá
+    plt.plot(states_buy, data_input[states_buy, 0], '^', markersize=10, color='m', label='Buying signal')
+    plt.plot(states_sell, data_input[states_sell, 0], 'v', markersize=10, color='k', label='Selling signal')
+
+    plt.title('Total gains: %f' % profit)
     plt.legend()
+    plt.show()
+
     
     if save_plot:
         if filename is None:
@@ -83,12 +84,10 @@ def plot_behavior(data_input, states_buy, states_sell, profit, save_plot=False, 
 class DQN(nn.Module):
     def __init__(self, state_size, action_size):
         super(DQN, self).__init__()
-        # Simplified architecture with fewer parameters
-        self.fc1 = nn.Linear(state_size, 32)  # Reduced from 64 to 32 neurons
-        self.fc2 = nn.Linear(32, 16)          # Reduced from 32 to 16 neurons
-        self.fc3 = nn.Linear(16, action_size) # Removed one layer, connecting directly to output
+        self.fc1 = nn.Linear(state_size, 64)  # Adjusted to reflect input size
+        self.fc2 = nn.Linear(64, 32)  # Adjusted to reflect input size
+        self.fc3 = nn.Linear(32, action_size) # Connecting directly to output
         
-        # Print model parameter count
         params = sum(p.numel() for p in self.parameters())
         print(f"Model created with {params} parameters")
         
@@ -100,20 +99,18 @@ class DQN(nn.Module):
 # Agent Class
 class Agent:
     def __init__(self, state_size, is_eval=False, model_name=""):
-        self.state_size = state_size # normalized previous days
-        self.action_size = 3 # sit, buy, sell
+        self.state_size = state_size  # Adjusted for 2 features per day: price and vpin
+        self.action_size = 3  # sit, buy, sell
         self.memory = deque(maxlen=1000)
         self.inventory = []
         self.model_name = model_name
         self.is_eval = is_eval
 
-        # Hyperparameters
         self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
         
-        # Device configuration - using MPS for Mac with Apple Silicon, fallback to CPU
         if torch.backends.mps.is_available():
             self.device = torch.device("mps")
             print("Using MPS (Metal Performance Shaders) for acceleration")
@@ -121,35 +118,28 @@ class Agent:
             self.device = torch.device("cpu")
             print("MPS not available, using CPU")
         
-        # Create the neural network
         self.model = DQN(state_size, self.action_size).to(self.device)
         
-        # Load model if evaluating
         if is_eval and os.path.exists(model_name):
             self.model.load_state_dict(torch.load(model_name, map_location=self.device))
             self.model.eval()
             print(f"Model loaded from {model_name}")
         
-        # Loss and optimizer
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
     
     def act(self, state): 
-        # Random action for exploration
         if not self.is_eval and random.random() <= self.epsilon:
             return random.randrange(self.action_size)
         
-        # Convert numpy array to PyTorch tensor
         state_tensor = torch.FloatTensor(state).to(self.device)
         
-        # Get action from model
         with torch.no_grad():
             q_values = self.model(state_tensor)
         
         return torch.argmax(q_values).item()
 
     def expReplay(self, batch_size):
-        # Skip if we don't have enough experiences
         if len(self.memory) < batch_size:
             return
             
@@ -159,29 +149,24 @@ class Agent:
             mini_batch.append(self.memory[i])
         
         for state, action, reward, next_state, done in mini_batch:
-            # Convert numpy arrays to PyTorch tensors
             state_tensor = torch.FloatTensor(state).to(self.device)
             next_state_tensor = torch.FloatTensor(next_state).to(self.device)
             
-            # Calculate target Q value
             target = reward
             if not done:
                 with torch.no_grad():
                     target = reward + self.gamma * torch.max(self.model(next_state_tensor)).item()
             
-            # Get current Q values
             self.model.train()
             q_values = self.model(state_tensor)
             target_f = q_values.clone().detach()
             target_f[0, action] = target
             
-            # Perform one step of optimization
             self.optimizer.zero_grad()
             loss = self.criterion(q_values, target_f)
             loss.backward()
             self.optimizer.step()
         
-        # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
@@ -192,82 +177,69 @@ def main():
         dataset = pd.read_csv('RL_data/VCBVPIN.csv', index_col=0)
         dataset = dataset.dropna()
     except FileNotFoundError:
-        print("Data file not found. Please ensure the SP500.csv file is in the 'data' directory.")
+        print("Data file not found. Please ensure the AAPL.csv file is in the 'data' directory.")
         return
     
-    # Check and create data directory if it doesn't exist
     if not os.path.exists('data'):
         os.makedirs('data')
     
-    # Check and create models directory if it doesn't exist
     if not os.path.exists('models'):
         os.makedirs('models')
     
     # Prepare data
-    close = dataset['Price'].values
-    vpin = dataset["VPIN"].values
-    all_data = list(zip(close, vpin))
-    all_data = np.array(all_data) 
-    # Split data into training and testing sets
-    train_size = int(len(all_data) * 0.8)
-    
-    train_data = all_data[:train_size]
-    test_data = all_data[train_size:]
+    dataset = dataset.tail(200)
+    price_vpin_data = dataset[["Price", "VPIN"]].values
+    price_vpin_data = price_vpin_data[~np.isnan(price_vpin_data).any(axis=1)]  # Remove rows with NaN values
+
+    train_size = int(len(price_vpin_data) * 0.8)
+    train_data = price_vpin_data[:train_size]
+    test_data = price_vpin_data[train_size:]
     
     # Fit scale data
     scaler = MinMaxScaler()
     train_data = scaler.fit_transform(train_data)
     test_data  = scaler.transform(test_data)
     
-    print(f"Data loaded: {len(all_data)} total points")
+    print(f"Data loaded: {len(price_vpin_data)} total points")
     print(f"Training data: {len(train_data)} points")
     print(f"Testing data: {len(test_data)} points")
     
-    # Parameters
-    window_size = 10  # Increased to 10 as requested
+    window_size = 10
     batch_size = 32
     episodes = 5
     model_name = "models/model_sp500.pth"
     
-    # Training function (inline definition to fix bugs)
     def train_model(stock_data, window_size=10, batch_size=32, episodes=5, model_name="model_sp500.pth"):
         data = stock_data
         l = len(data) - 1
-        agent = Agent(window_size)
+        agent = Agent(window_size * 2)
         
         print(f"Training on {l} data points for {episodes} episodes")
         
         for e in range(episodes):
             print(f"Running episode {e+1}/{episodes}")
-            
             state = getState(data, 0, window_size + 1)
             total_profit = 0
             agent.inventory = []
-            losses = []
             
             for t in range(l):
                 action = agent.act(state)
                 
-                # Make sure we don't go out of bounds
                 if t + 1 < len(data):
                     next_state = getState(data, t + 1, window_size + 1)
                 else:
-                    # If we're at the last element, just use the current state
                     next_state = state
                 
                 reward = 0
 
-                if action == 1: # buy
+                if action == 1:
                     agent.inventory.append(data[t])
-                    print(f"Step {t}: Buy: {formatPrice(data[t], scaler)}")
-                
-                elif action == 2 and len(agent.inventory) > 0: # sell
+                    print(f"Step {t}: Buy: {formatPrice(data[t][0], scaler)}")
+                elif action == 2 and len(agent.inventory) > 0:
                     bought_price = agent.inventory.pop(0)
-                    bought_price = scaler.inverse_transform([bought_price])[0][0]
-                    data_t = scaler.inverse_transform([data[t]])[0][0]
-                    reward = max(data_t - bought_price, 0)
-                    total_profit += data_t - bought_price
-                    print(f"Step {t}: Sell: {formatPrice(data[t], scaler)} | Profit: {formatPrice(data[t] - bought_price, scaler)}")
+                    reward = max(data[t][0] - bought_price[0], 0)
+                    total_profit += data[t][0] - bought_price[0]
+                    print(f"Step {t}: Sell: {formatPrice(data[t][0], scaler)} | Profit: {formatPrice(data[t][0] - bought_price[0], scaler)}")
                 
                 done = True if t == l - 1 else False
                 agent.memory.append((state, action, reward, next_state, done))
@@ -282,30 +254,18 @@ def main():
                 
                 if len(agent.memory) > batch_size:
                     agent.expReplay(batch_size)
-                    
-                # Print progress every 500 steps
-                if t % 500 == 0 and t > 0:
-                    print(f"Progress: {t}/{l} steps completed in episode {e+1}")
             
-            # Save model after every epoch (episode)
-            # Create models directory if it doesn't exist
-            if not os.path.exists(os.path.dirname(model_name)):
-                os.makedirs(os.path.dirname(model_name))
-                
-            # Save with episode number in filename to keep track of progress
             epoch_model_name = model_name.replace('.pth', f'_epoch_{e+1}.pth')
             torch.save(agent.model.state_dict(), epoch_model_name)
             print(f"Model saved to {epoch_model_name} after episode {e+1}")
             
-            # Also save as the main model file (overwrite)
             torch.save(agent.model.state_dict(), model_name)
             print(f"Model also saved as {model_name}")
     
-    # Evaluation function (inline definition to fix bugs)
     def evaluate_model(stock_data, window_size=10, model_name="model_sp500.pth", save_plot=False):
         data = stock_data
         l = len(data) - 1
-        agent = Agent(window_size, is_eval=True, model_name=model_name)
+        agent = Agent(window_size * 2, is_eval=True, model_name=model_name)
         
         print(f"Evaluating on {l} data points")
         
@@ -319,52 +279,42 @@ def main():
         for t in range(l):
             action = agent.act(state)
             
-            # Make sure we don't go out of bounds
             if t + 1 < len(data):
                 next_state = getState(data, t + 1, window_size + 1)
             else:
-                # If we're at the last element, just use the current state
                 next_state = state
             
-            if action == 1: # buy
+            if action == 1:
                 agent.inventory.append(data[t])
                 states_buy.append(t)
-                print(f"Step {t}: Buy: {formatPrice(data[t], scaler)}")
+                print(f"Step {t}: Buy: {formatPrice(data[t][0], scaler)}")
             
-            elif action == 2 and len(agent.inventory) > 0: # sell
+            elif action == 2 and len(agent.inventory) > 0:
                 bought_price = agent.inventory.pop(0)
-                reward = max(data[t] - bought_price, 0)
-                total_profit += data[t] - bought_price
+                reward = max(data[t][0] - bought_price[0], 0)
+                total_profit += data[t][0] - bought_price[0]
                 states_sell.append(t)
-                print(f"Step {t}: Sell: {formatPrice(data[t], scaler)} | Profit: {formatPrice(data[t] - bought_price, scaler)}")
+                print(f"Step {t}: Sell: {formatPrice(data[t][0], scaler)} | Profit: {formatPrice(data[t][0] - bought_price[0], scaler)}")
             
             state = next_state
-            
-            # Print progress every 500 steps
-            if t % 500 == 0 and t > 0:
-                print(f"Progress: {t}/{l} steps completed in evaluation")
         
         print("------------------------------------------")
-        print(f"Total Profit: {formatPrice(total_profit), scaler}")
+        print(f"Total Profit: {formatPrice(total_profit, scaler)}")
         print(f"Total Buy actions: {len(states_buy)}")
         print(f"Total Sell actions: {len(states_sell)}")
         print("------------------------------------------")
         
-        # Extract model name for plot filename
         model_basename = os.path.basename(model_name).replace('.pth', '')
         plot_filename = f"trading_behavior_{model_basename}.png"
         
         plot_behavior(data, states_buy, states_sell, total_profit, save_plot=save_plot, filename=plot_filename)
         return total_profit, states_buy, states_sell
     
-    # Ask user whether to train or evaluate
     choice = input("Do you want to train (t) or evaluate (e) the model? [t/e]: ").lower()
     
     if choice == 't':
-        # Train the model
         train_model(train_data, window_size, batch_size, episodes, model_name)
         
-        # Ask if user wants to evaluate after training
         eval_choice = input("Do you want to evaluate the trained model? [y/n]: ").lower()
         if eval_choice == 'y':
             save_plot_choice = input("Do you want to save the evaluation plot? [y/n]: ").lower()
@@ -374,7 +324,6 @@ def main():
             print(f"Total profit on test data: {formatPrice(profit, scaler)}")
     
     elif choice == 'e':
-        # Allow selecting a specific epoch model
         model_files = [f for f in os.listdir('models') if f.startswith('model_sp500') and f.endswith('.pth')]
         
         if len(model_files) == 0:
@@ -394,12 +343,10 @@ def main():
             selected_model = model_name
             print(f"Using default model: {selected_model}")
             
-        # Check if model exists
         if not os.path.exists(selected_model):
             print(f"Model file {selected_model} not found. Please train the model first.")
             return
             
-        # Evaluate the model
         save_plot_choice = input("Do you want to save the evaluation plot? [y/n]: ").lower()
         save_plot = (save_plot_choice == 'y')
         profit, states_buy, states_sell = evaluate_model(test_data, window_size, selected_model, save_plot)
@@ -410,4 +357,4 @@ def main():
         print("Invalid choice. Please run the script again and enter 't' for training or 'e' for evaluation.")
 
 if __name__ == "__main__":
-    main() 
+    main()
