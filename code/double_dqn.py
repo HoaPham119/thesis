@@ -29,24 +29,39 @@ def getState(data, t, n):
     for i in range(len(block) - 1):
         price_diff = block[i + 1][0] - block[i][0]
         vpin_diff = block[i + 1][1] - block[i][1]
-        res.extend([price_diff, vpin_diff])  # Trước: Dùng sigmoid(x)
+        res.extend([price_diff, vpin_diff])
 
     while len(res) < (n - 1) * 2:
         res.append(0)
 
     return np.array([res])
 
-def plot_behavior(data_input, states_buy, states_sell, profit, save_plot=False, filename=None):
+def plot_behavior(data_input, states_buy, states_sell, profit, scaler, save_plot=False, filename=None):
     if save_plot and not os.path.exists('plots'):
         os.makedirs('plots')
 
-    plt.figure(figsize=(15, 5))
-    plt.plot(data_input[:, 0], color='r', lw=2., label='Price')
-    plt.plot(data_input[:, 1], color='b', lw=2., label='VPIN')
-    plt.plot(states_buy, data_input[states_buy, 0], '^', markersize=10, color='m', label='Buying signal')
-    plt.plot(states_sell, data_input[states_sell, 0], 'v', markersize=10, color='k', label='Selling signal')
-    plt.title(f'Total gains: {profit:.2f}')
-    plt.legend()
+    price_vpin_inverse = scaler.inverse_transform(data_input)
+
+    fig, ax1 = plt.subplots(figsize=(15, 5))
+
+    color_price = 'tab:red'
+    color_vpin = 'tab:blue'
+
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Price', color=color_price)
+    ax1.plot(price_vpin_inverse[:, 0], color=color_price, lw=2., label='Price')
+    ax1.tick_params(axis='y', labelcolor=color_price)
+    ax1.plot(states_buy, price_vpin_inverse[states_buy, 0], '^', markersize=10, color='m', label='Buying signal')
+    ax1.plot(states_sell, price_vpin_inverse[states_sell, 0], 'v', markersize=10, color='k', label='Selling signal')
+
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('VPIN', color=color_vpin)
+    ax2.plot(price_vpin_inverse[:, 1], color=color_vpin, lw=2., label='VPIN')
+    ax2.tick_params(axis='y', labelcolor=color_vpin)
+
+    fig.suptitle(f'Total gains: ${profit:.2f}')
+    fig.tight_layout()
+
     if save_plot:
         if filename is None:
             filename = f'plots/trading_behavior_profit_{profit:.2f}.png'
@@ -54,6 +69,8 @@ def plot_behavior(data_input, states_buy, states_sell, profit, save_plot=False, 
             filename = f'plots/{filename}'
         plt.savefig(filename, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {filename}")
+
+    plt.legend()
     plt.show()
 
 class DQN(nn.Module):
@@ -72,7 +89,7 @@ class Agent:
     def __init__(self, state_size, is_eval=False, model_name=""):
         self.state_size = state_size
         self.action_size = 3
-        self.memory = deque(maxlen=50000) # Trước đang là 1000, t
+        self.memory = deque(maxlen=50000)
         self.inventory = []
         self.model_name = model_name
         self.is_eval = is_eval
@@ -147,7 +164,6 @@ def main():
     os.makedirs('data', exist_ok=True)
     os.makedirs('models', exist_ok=True)
 
-    # dataset = dataset.tail(200)
     price_vpin_data = dataset[["Price", "VPIN"]].dropna().values
     train_size = int(len(price_vpin_data) * 0.8)
     train_data = price_vpin_data[:train_size]
@@ -208,7 +224,25 @@ def main():
             print(f"Model also saved as {model_name}")
 
     def evaluate_model(stock_data, save_plot):
-        agent = Agent(window_size * 2, is_eval=True, model_name=model_name)
+        model_dir = 'models'
+        model_files = [f for f in os.listdir(model_dir) if f.endswith('.pth')]
+
+        if not model_files:
+            print("No model files found in 'models/' directory.")
+            return
+
+        print("Available model files:")
+        for i, f in enumerate(model_files):
+            print(f"{i + 1}. {f}")
+
+        model_choice = input(f"Enter the number of the model to load (1-{len(model_files)}): ").strip()
+        if not model_choice.isdigit() or not (1 <= int(model_choice) <= len(model_files)):
+            print("Invalid choice.")
+            return
+
+        chosen_model = os.path.join(model_dir, model_files[int(model_choice) - 1])
+
+        agent = Agent(window_size * 2, is_eval=True, model_name=chosen_model)
         data_length = len(stock_data) - 1
         state = getState(stock_data, 0, window_size + 1)
         total_profit, agent.inventory = 0, []
@@ -240,8 +274,8 @@ def main():
         print(f"Total Sell actions: {len(states_sell)}")
         print("------------------------------------------")
 
-        plot_filename = f"trading_behavior_{os.path.basename(model_name).replace('.pth', '')}.png"
-        plot_behavior(stock_data, states_buy, states_sell, total_profit, save_plot=save_plot, filename=plot_filename)
+        plot_filename = f"trading_behavior_{os.path.basename(chosen_model).replace('.pth', '')}.png"
+        plot_behavior(stock_data, states_buy, states_sell, total_profit, scaler, save_plot=save_plot, filename=plot_filename)
 
     choice = input("Do you want to train (t) or evaluate (e) the model? [t/e]: ").lower()
     if choice == 't':
@@ -250,7 +284,8 @@ def main():
             save_plot = input("Do you want to save the evaluation plot? [y/n]: ").lower() == 'y'
             evaluate_model(test_data, save_plot)
     elif choice == 'e':
-        evaluate_model(test_data, input("Do you want to save the evaluation plot? [y/n]: ").lower() == 'y')
+        save_plot = input("Do you want to save the evaluation plot? [y/n]: ").lower() == 'y'
+        evaluate_model(test_data, save_plot)
     else:
         print("Invalid choice. Please run again and choose 't' or 'e'.")
 
