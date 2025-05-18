@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-filename_inputs = ['STB', 'VIB', 'SHB']
+filename_inputs = ['STB', 'VIB', 'SHB', 'VCB', 'FPT', 'HPG']
 
 def formatPrice(n, scaler):
     price = scaler.inverse_transform([[n, 0]])[0][0]
@@ -20,19 +20,49 @@ def formatPrice(n, scaler):
 def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
+def calculate_rsi(prices, window=14):
+    if len(prices) < window + 1:
+        prices = [prices[0]] * (window + 1 - len(prices)) + prices
+    deltas = np.diff(prices)
+    gains = np.maximum(deltas, 0)
+    losses = -np.minimum(deltas, 0)
+    avg_gain = np.mean(gains[-window:])
+    avg_loss = np.mean(losses[-window:]) + 1e-6 
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
 def getState(data, t, n):
     d = t - n + 1
     if d < 0:
         block = np.array([data[0]] * (-d) + data[0:t + 1].tolist())
     else:
         block = data[d:t + 1]
+    
     res = []
+
+    # Price & VPIN
     for i in range(len(block) - 1):
         price_diff = block[i + 1][0] - block[i][0]
         vpin_diff = block[i + 1][1] - block[i][1]
         res.extend([price_diff, vpin_diff])
-    while len(res) < (n - 1) * 2:
+    
+    # SMA 
+    sma_short = calculate_sma(data, t, window=5)
+    sma_long = calculate_sma(data, t, window=10)
+    price_now = data[t][0]
+    res.extend([
+        price_now - sma_short,
+        price_now - sma_long,
+    ])
+
+    # RSI 
+    price_series = [data[i][0] for i in range(max(0, t - 14), t + 1)]
+    rsi = calculate_rsi(price_series, window=14)
+    res.append(rsi / 100)
+
+    while len(res) < (n - 1) * 2 + 3:
         res.append(0)
+
     return np.array([res])
 
 def calculate_sma(data, t, window):
@@ -77,11 +107,17 @@ class DuelingDQN(nn.Module):
         super(DuelingDQN, self).__init__()
         self.fc1 = nn.Linear(state_size, 64)
         self.fc2 = nn.Linear(64, 32)
+        # self.fc1 = nn.Linear(state_size, 128)
+        # self.fc2 = nn.Linear(128, 64)
+        # self.fc3 = nn.Linear(64, 32)
+        # self.dropout = nn.Dropout(0.1)
         self.value_stream = nn.Linear(32, 1)
         self.advantage_stream = nn.Linear(32, action_size)
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
+        # x = F.relu(self.fc3(x))
+        # x = self.dropout(x)
         value = self.value_stream(x)
         advantage = self.advantage_stream(x)
         return value + (advantage - advantage.mean(dim=1, keepdim=True))
@@ -169,19 +205,20 @@ def main(filename_input):
     model_name = f"models/deulindqnfilter/{filename_input}/model_sp500.pth"
 
     def train_model(stock_data):
-        agent = Agent(window_size * 2)
+        state_length = (window_size - 1) * 2 + 3
+        agent = Agent(state_length)
         data_length = len(stock_data) - 1
         for episode in range(episodes):
-            state = getState(stock_data, 0, window_size + 1)
+            state = getState(stock_data, 0, window_size)
             total_profit, agent.inventory = 0, []
             for t in range(data_length):
                 action = agent.act(state)
 
-                sma_short = calculate_sma(stock_data, t, window=5)
-                sma_long = calculate_sma(stock_data, t, window=10)
-                is_downtrend = sma_short < sma_long
+                # sma_short = calculate_sma(stock_data, t, window=5)
+                # sma_long = calculate_sma(stock_data, t, window=10)
+                # is_downtrend = sma_short < sma_long
 
-                next_state = getState(stock_data, t + 1, window_size + 1) if t + 1 < len(stock_data) else state
+                next_state = getState(stock_data, t + 1, window_size) if t + 1 < len(stock_data) else state
                 reward = 0
 
                 if action == 1:
@@ -197,11 +234,11 @@ def main(filename_input):
                     print(f"Step {t}: Sell: {sell_price} | Profit: {profit:.2f}")
 
 
-                if is_downtrend:
-                    if action == 1:
-                        reward = reward - reward*0.2
-                    elif action == 0:
-                        reward = reward - reward*0.1
+                # if is_downtrend:
+                #     if action == 1:
+                #         reward = reward - 0.2
+                #     elif action == 0:
+                #         reward = reward - 0.1
                 if action == 1:
                     overbuy_penalty = max(0, len(agent.inventory) - 5) * 0.1
                     reward = reward - overbuy_penalty*0.1
@@ -218,7 +255,17 @@ def main(filename_input):
                     print(f"Episode {episode + 1} completed")
                     print(f"Total Profit: ${total_profit:.2f}")
                     print(f"Final epsilon: {agent.epsilon:.4f}")
+                    if agent.inventory:
+                        print(f"Forced sell of remaining {len(agent.inventory)} positions at end of episode.")
+                        for remaining_stock in agent.inventory:
+                            sell_price = formatPrice(stock_data[t][0], scaler)
+                            buy_price = formatPrice(remaining_stock[0], scaler)
+                            profit = float(sell_price.replace("$", "").replace("-", "")) - float(buy_price.replace("$", "").replace("-", ""))
+                            total_profit += profit
+                            print(f"Forced Sell: {sell_price} | Profit: {profit:.2f}")
+                        agent.inventory = []
                     print("##############")
+                    
 
             agent.update_target_model()
             epoch_model_name = model_name.replace('.pth', f'_epoch_{episode + 1}.pth')
@@ -246,16 +293,17 @@ def main(filename_input):
                 return
 
             chosen_model = os.path.join(model_dir, model_files[int(model_choice) - 1])
-            agent = Agent(window_size * 2, is_eval=True, model_name=chosen_model)
+            state_length = (window_size - 1) * 2 + 3
+            agent = Agent(state_length, is_eval=True, model_name=chosen_model)
             data_length = len(stock_data) - 1
-            state = getState(stock_data, 0, window_size + 1)
+            state = getState(stock_data, 0, window_size)
             total_profit, agent.inventory = 0, []
             states_buy, states_sell = [], []
 
             print(f"Evaluating on {data_length} data points")
             for t in range(data_length):
                 action = agent.act(state)
-                next_state = getState(stock_data, t + 1, window_size + 1) if t + 1 < len(stock_data) else state
+                next_state = getState(stock_data, t + 1, window_size) if t + 1 < len(stock_data) else state
 
                 if action == 1:
                     agent.inventory.append(stock_data[t])
@@ -271,6 +319,17 @@ def main(filename_input):
                     print(f"Step {t}: Sell: {sell_price} | Profit: {profit:.2f}")
 
                 state = next_state
+            
+            if agent.inventory:
+                print(f"Forced sell of remaining {len(agent.inventory)} positions at end of evaluation.")
+                for remaining_stock in agent.inventory:
+                    sell_price = formatPrice(stock_data[-1][0], scaler)
+                    buy_price = formatPrice(remaining_stock[0], scaler)
+                    profit = float(sell_price.replace("$", "").replace("-", "")) - float(buy_price.replace("$", "").replace("-", ""))
+                    total_profit += profit
+                    states_sell.append(data_length)
+                    print(f"Forced Sell: {sell_price} | Profit: {profit:.2f}")
+                agent.inventory = []
 
             print("------------------------------------------")
             print(f"Total Profit: ${total_profit:.2f}")
