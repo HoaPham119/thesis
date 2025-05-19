@@ -12,36 +12,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 filename_inputs = [
-#     'STB',
-#  'SAB',
-#  'VJC',
-#  'VRE',
-#  'VHM',
-#  'ACB',
-#  'GVR',
-#  'VNM',
-#  'SSB',
-#  'FPT',
-#  'BID',
-#  'POW',
-#  'MBB',
-#  'PLX',
-#  'GAS',
-#  'HPG',
-#  'HDB',
-#  'MWG',
  'VCB',
-#  'SSI',
-#  'TCB',
-#  'SHB',
-#  'CTG',
-#  'BVH',
  'VIC',
-#  'VIB',
-#  'TPB',
-#  'MSN',
-#  'VPB',
-#  'BCM'
  ]
 
 def formatPrice(n, scaler):
@@ -69,41 +41,6 @@ def getState(data, t, n):
 
     return np.array([res])
 
-# def plot_behavior(data_input, states_buy, states_sell, profit, scaler, save_plot=False, filename=None):
-#     if save_plot and not os.path.exists(f'plots/deulindqn/{filename_input}/'):
-#         os.makedirs(f'plots/deulindqn/{filename_input}')
-
-#     price_vpin_inverse = scaler.inverse_transform(data_input)
-#     fig, ax1 = plt.subplots(figsize=(15, 5))
-
-#     color_price = 'tab:red'
-#     color_vpin = 'tab:blue'
-
-#     ax1.set_xlabel('Time')
-#     ax1.set_ylabel('Price', color=color_price)
-#     ax1.plot(price_vpin_inverse[:, 0], color=color_price, lw=2., label='Price')
-#     ax1.tick_params(axis='y', labelcolor=color_price)
-#     ax1.plot(states_buy, price_vpin_inverse[states_buy, 0], '^', markersize=10, color='m', label='Buying signal')
-#     ax1.plot(states_sell, price_vpin_inverse[states_sell, 0], 'v', markersize=10, color='k', label='Selling signal')
-
-#     ax2 = ax1.twinx()
-#     ax2.set_ylabel('VPIN', color=color_vpin)
-#     ax2.plot(price_vpin_inverse[:, 1], color=color_vpin, lw=2., label='VPIN')
-#     ax2.tick_params(axis='y', labelcolor=color_vpin)
-
-#     fig.suptitle(f'Total gains: ${profit:.2f}')
-#     fig.tight_layout()
-
-#     if save_plot:
-#         if filename is None:
-#             filename = f'plots/deulindqn/{filename_input}/trading_behavior_profit_{profit:.2f}.png'
-#         else:
-#             filename = f'plots/deulindqn/{filename_input}/{filename}'
-#         plt.savefig(filename, dpi=300, bbox_inches='tight')
-#         print(f"Plot saved to {filename}")
-
-#     plt.legend()
-#     plt.show()
 
 def plot_behavior(data_input, states_buy, states_sell, profit, scaler, save_plot=False, filename=None):
     if save_plot and not os.path.exists(f'plots/deulindqn/{filename_input}/'):
@@ -256,10 +193,14 @@ def main(filename_input):
         agent = Agent(window_size * 2)
         data_length = len(stock_data) - 1
         print(f"Training on {data_length} data points for {episodes} episodes")
+        transaction_fee = 0.001  # phí giao dịch 0.1%
+        min_trade_interval = 3   # không giao dịch quá sát nhau
+        penalty_close_interval = 0.5 
 
         for episode in range(episodes):
             state = getState(stock_data, 0, window_size + 1)
             total_profit, agent.inventory = 0, []
+            last_trade_step = -10 
             print(f"Running episode {episode + 1}/{episodes}")
 
             for t in range(data_length):
@@ -267,6 +208,7 @@ def main(filename_input):
                 next_state = getState(stock_data, t + 1, window_size + 1) if t + 1 < len(stock_data) else state
 
                 reward = 0
+                is_trade = False
                 if action == 1:
                     agent.inventory.append(stock_data[t])
                     print(f"Step {t}: Buy: {formatPrice(stock_data[t][0], scaler)}")
@@ -275,10 +217,16 @@ def main(filename_input):
                     sell_price = formatPrice(stock_data[t][0], scaler)
                     buy_price = formatPrice(bought_price[0], scaler)
                     profit = float(sell_price.replace("$", "").replace("-", "")) - float(buy_price.replace("$", "").replace("-", ""))
-                    reward = profit
+                    # reward = profit
+                    reward = profit - transaction_fee
                     total_profit += profit
+                    is_trade = True
                     print(f"Step {t}: Sell: {sell_price} | Profit: {profit:.2f}")
-
+                if is_trade and (t - last_trade_step < min_trade_interval):
+                    reward -= penalty_close_interval
+                    print(f"Step {t}: Penalized for trading too soon (-{penalty_close_interval})")
+                if is_trade:
+                    last_trade_step = t
                 done = t == data_length - 1
                 agent.memory.append((state, action, reward, next_state, done))
                 state = next_state
@@ -311,7 +259,6 @@ def main(filename_input):
         for i, f in enumerate(model_files):
             print(f"{i + 1}. {f}")
 
-        # model_choice = input(f"Enter the number of the model to load (1-{len(model_files)}): ").strip()
         model_choices=["1","2", "3","4","5","6"]
         for model_choice in model_choices:
             if not model_choice.isdigit() or not (1 <= int(model_choice) <= len(model_files)):
@@ -320,6 +267,10 @@ def main(filename_input):
 
             chosen_model = os.path.join(model_dir, model_files[int(model_choice) - 1])
             agent = Agent(window_size * 2, is_eval=True, model_name=chosen_model)
+            transaction_fee = 0.001
+            min_trade_interval = 3
+            penalty_close_interval = 0.5
+            last_trade_step = -10
             data_length = len(stock_data) - 1
             state = getState(stock_data, 0, window_size + 1)
             total_profit, agent.inventory = 0, []
@@ -333,13 +284,26 @@ def main(filename_input):
                 if action == 1:
                     agent.inventory.append(stock_data[t])
                     states_buy.append(t)
+                    if t - last_trade_step < min_trade_interval:
+                        print(f"Step {t}: Penalized for trading too soon (-{penalty_close_interval})")
+                    last_trade_step = t
+
                     print(f"Step {t}: Buy: {formatPrice(stock_data[t][0], scaler)}")
                 elif action == 2 and agent.inventory:
                     bought_price = agent.inventory.pop(0)
                     sell_price = formatPrice(stock_data[t][0], scaler)
                     buy_price = formatPrice(bought_price[0], scaler)
                     profit = float(sell_price.replace("$", "").replace("-", "")) - float(buy_price.replace("$", "").replace("-", ""))
+                    reward = profit - transaction_fee
+
+                    # Phạt nếu trade quá gần
+                    if t - last_trade_step < min_trade_interval:
+                        reward -= penalty_close_interval
+                        print(f"Step {t}: Penalized for trading too soon (-{penalty_close_interval})")
+
                     total_profit += profit
+                    last_trade_step = t
+
                     states_sell.append(t)
                     print(f"Step {t}: Sell: {sell_price} | Profit: {profit:.2f}")
 
@@ -358,13 +322,6 @@ def main(filename_input):
     choice = "t"
     if choice == 't':
         train_model(train_data)
-        # if input("Do you want to evaluate the trained model? [y/n]: ").lower() == 'y':
-        # if True:
-        #     # save_plot = input("Do you want to save the evaluation plot? [y/n]: ").lower() == 'y'
-        #     save_plot=True
-        #     evaluate_model(test_data, save_plot)
-    # elif choice == 'e':
-        # save_plot = input("Do you want to save the evaluation plot? [y/n]: ").lower() == 'y'
         save_plot=True
         evaluate_model(test_data, save_plot)
     else:
