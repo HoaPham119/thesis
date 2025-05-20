@@ -13,7 +13,6 @@ import torch.nn.functional as F
 
 filename_inputs = [
  'VCB',
- 'VIC',
  ]
 
 def formatPrice(n, scaler):
@@ -172,7 +171,7 @@ def main(filename_input):
     try:
         dataset = pd.read_csv(f'RL_data/{filename_input}VPIN.csv', index_col=0).dropna()
     except FileNotFoundError:
-        print("Data file not found. Please ensure the VCBVPIN.csv file is in the 'data' directory.")
+        print(f"Data file not found. Please ensure the {filename_input}VPIN.csv file is in the 'RL_data' directory.")
         return
 
     os.makedirs('data', exist_ok=True)
@@ -235,6 +234,15 @@ def main(filename_input):
                     agent.expReplay(batch_size)
 
                 if done:
+                    final_price = stock_data[-1][0]
+                    while agent.inventory:
+                        bought_price = agent.inventory.pop(0)
+                        sell_price = formatPrice(final_price, scaler)
+                        buy_price = formatPrice(bought_price[0], scaler)
+                        profit = float(sell_price.replace("$", "").replace("-", "")) - float(buy_price.replace("$", "").replace("-", ""))
+                        reward = profit - transaction_fee
+                        total_profit += profit
+                        print(f"End of episode {episode + 1}: Sell remaining position: {sell_price} | Profit: {profit:.2f}")
                     print("##############")
                     print(f"Episode {episode + 1} completed")
                     print(f"Total Profit: ${total_profit:.2f}")
@@ -259,7 +267,7 @@ def main(filename_input):
         for i, f in enumerate(model_files):
             print(f"{i + 1}. {f}")
 
-        model_choices=["1","2", "3","4","5","6"]
+        model_choices=[ "1","2", "3","4","5","6", "7", "8", "9", "10"]
         for model_choice in model_choices:
             if not model_choice.isdigit() or not (1 <= int(model_choice) <= len(model_files)):
                 print("Invalid choice.")
@@ -308,6 +316,15 @@ def main(filename_input):
                     print(f"Step {t}: Sell: {sell_price} | Profit: {profit:.2f}")
 
                 state = next_state
+            while agent.inventory:
+                final_price = stock_data[-1][0]
+                bought_price = agent.inventory.pop(0)
+                sell_price = formatPrice(final_price, scaler)
+                buy_price = formatPrice(bought_price[0], scaler)
+                profit = float(sell_price.replace("$", "").replace("-", "")) - float(buy_price.replace("$", "").replace("-", ""))
+                total_profit += profit
+                states_sell.append(data_length - 1)
+                print(f"Final Sell: {sell_price} | Profit: {profit:.2f}")
 
             print("------------------------------------------")
             print(f"Total Profit: ${total_profit:.2f}")
