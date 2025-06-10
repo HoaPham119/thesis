@@ -1,4 +1,6 @@
 import pickle
+import datetime
+import pandas as pd
 import os
 import yfinance as yf
 from pathlib import Path
@@ -6,7 +8,7 @@ from pathlib import Path
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../")
 
 
-def load_data(folder="tick"):
+def load_data(folder="tick", type = "pkl"):
     if folder == "":
         file_path = os.path.join(BASE_DIR, f"data")
         folder_path = Path(file_path)
@@ -15,12 +17,26 @@ def load_data(folder="tick"):
         file_path = os.path.join(BASE_DIR, f"data/{folder}")
         folder_path = Path(file_path)
         files = [f.name for f in folder_path.iterdir() if f.is_file()]
-    data_dict = {}
-    for filename in files:
-        name, ext = os.path.splitext(filename)
-        with open(f"{folder_path}/{filename}", "rb") as f:
-            data_dict[name] = pickle.load(f)
-    return data_dict
+    if type == "pkl":
+        data_dict = {}
+        for filename in files:
+            name, ext = os.path.splitext(filename)
+            with open(f"{folder_path}/{filename}", "rb") as f:
+                data_dict[name] = pickle.load(f)
+        return data_dict
+    elif type == "csv":
+        data_dict = {}
+        for filename in files:
+            name, ext = os.path.splitext(filename)
+            df = pd.read_csv(f"{folder_path}/{filename}")
+            df = df[["0", "4", "5"]]
+            # convert df["0"] to datetime
+            df["0"] = df["0"]/1000
+            df["0"] = df["0"].apply(lambda x: datetime.datetime.fromtimestamp(x))
+            df.rename(columns = {"0": "Date", "4": "Gia KL", "5": "KL"}, inplace = True)
+            data_dict[name] = df
+        return data_dict
+        
 
 def get_data_from_yfinance():
 
@@ -40,5 +56,5 @@ def get_data_from_yfinance():
 
 
 if __name__ == "__main__":
-    get_data_from_yfinance()
-    load_data(folder="")
+    # get_data_from_yfinance()
+    data = load_data(folder="Binance", type = "csv")
