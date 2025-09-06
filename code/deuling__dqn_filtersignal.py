@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-filename_inputs = ['STB', 'VIB', 'SHB', 'VCB', 'FPT', 'HPG']
+filename_inputs = ['VCB']
 
 def formatPrice(n, scaler):
     price = scaler.inverse_transform([[n, 0]])[0][0]
@@ -105,12 +105,12 @@ def plot_behavior(data_input, states_buy, states_sell, profit, scaler, save_plot
 class DuelingDQN(nn.Module):
     def __init__(self, state_size, action_size):
         super(DuelingDQN, self).__init__()
-        self.fc1 = nn.Linear(state_size, 64)
-        self.fc2 = nn.Linear(64, 32)
-        # self.fc1 = nn.Linear(state_size, 128)
-        # self.fc2 = nn.Linear(128, 64)
-        # self.fc3 = nn.Linear(64, 32)
-        # self.dropout = nn.Dropout(0.1)
+        # self.fc1 = nn.Linear(state_size, 64)
+        # self.fc2 = nn.Linear(64, 32)
+        self.fc1 = nn.Linear(state_size, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 32)
+        self.dropout = nn.Dropout(0.1)
         self.value_stream = nn.Linear(32, 1)
         self.advantage_stream = nn.Linear(32, action_size)
     def forward(self, x):

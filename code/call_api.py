@@ -1,10 +1,13 @@
 import requests
-import json
+import json, os
 from datetime import datetime
 import pandas as pd
-output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance"
+output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg"
 
-def call_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1000, endTime = None):
+if not os.path.exists(output_path):
+    os.makedirs(output_path)
+
+def call_candlestick_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1000, endTime = None):
     # Gọi API Binance
     url = 'https://api.binance.com/api/v3/klines'
     params = {
@@ -30,7 +33,7 @@ def get_symbol_list():
     symbols = symbols["symbol"].to_list()[:50]
     return symbols
 
-if __name__ == "__main__":
+def get_candledstick_data():
     symbols_df = pd.read_csv("symbol.csv")
     symbol_list = symbols_df["symbol"].to_list()[:25]
     for symbol in symbol_list:
@@ -38,10 +41,43 @@ if __name__ == "__main__":
         i = 0
         df = pd.DataFrame()
         while i < 50:
-            klines, endTime = call_api(symbol = symbol,
+            klines, endTime = call_candlestick_api(symbol = symbol,
                                        endTime = endTime)
             df = pd.concat([df, klines]).reset_index(drop = True)
             i+=1
         df.to_csv(f"{output_path}/{symbol}.csv")
     print()
     
+def call_orderbookticker_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1000, endTime = None):
+    # Gọi API Binance
+    url = 'https://api.binance.com/api/v3/aggTrades'
+    params = {
+        'symbol': symbol,
+        'limit': limit
+        }   
+    if endTime is not None:
+       params["endTime"] =  endTime
+
+    response = requests.get(url, params=params)
+    klines = response.json()
+    klines = pd.DataFrame(klines)
+    endTime = klines["T"].to_list()[0]-1
+    return  klines, endTime 
+
+def get_orderbookticker_data():
+    symbols_df = pd.read_csv("symbol.csv")
+    symbol_list = symbols_df["symbol"].to_list()[:25]
+    for symbol in symbol_list:
+        endTime = None
+        i = 0
+        df = pd.DataFrame()
+        while i < 50:
+            klines, endTime = call_orderbookticker_api(symbol = symbol,
+                                       endTime = endTime)
+            df = pd.concat([df, klines]).reset_index(drop = True)
+            i+=1
+        df.to_csv(f"{output_path}/{symbol}.csv")
+    print()
+      
+if __name__ == "__main__":
+    get_orderbookticker_data()

@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 filename_inputs = [
- 'VCB',
+ 'BTCUSDT'
  ]
 
 def formatPrice(n, scaler):
@@ -267,7 +267,7 @@ def main(filename_input):
         for i, f in enumerate(model_files):
             print(f"{i + 1}. {f}")
 
-        model_choices=[ "1","2", "3","4","5","6", "7", "8", "9", "10"]
+        model_choices=[ "1","2", "3","4","5","6"]
         for model_choice in model_choices:
             if not model_choice.isdigit() or not (1 <= int(model_choice) <= len(model_files)):
                 print("Invalid choice.")

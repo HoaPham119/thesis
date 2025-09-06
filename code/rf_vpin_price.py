@@ -66,9 +66,9 @@ def plot_behavior(data_input, states_buy, states_sell, profit, save_plot=False, 
 class DQN(nn.Module):
     def __init__(self, state_size, action_size):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_size, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, action_size)
+        self.fc1 = nn.Linear(state_size, 64) # ánh xạ từ đầu vào state_size sang 64 neuron.
+        self.fc2 = nn.Linear(64, 32) # từ 64 neuron sang 32 neuron.
+        self.fc3 = nn.Linear(32, action_size) #từ 32 neuron ra số lượng hành động (action_size), là các Q-values cho từng hành động.
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
