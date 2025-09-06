@@ -1,8 +1,9 @@
 import requests
 import json, os
+import time
 from datetime import datetime
 import pandas as pd
-output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg"
+output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg/500"
 
 if not os.path.exists(output_path):
     os.makedirs(output_path)
@@ -65,18 +66,26 @@ def call_orderbookticker_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1
     return  klines, endTime 
 
 def get_orderbookticker_data():
-    symbols_df = pd.read_csv("symbol.csv")
-    symbol_list = symbols_df["symbol"].to_list()[:25]
+    # symbols_df = pd.read_csv("symbol.csv")
+    # symbol_list = symbols_df["symbol"].to_list()[:25]
+    symbol_list = [
+        # "BTCUSDT",
+        # "ETHUSDT",
+        "BNBUSDT",
+    ]
     for symbol in symbol_list:
         endTime = None
         i = 0
         df = pd.DataFrame()
-        while i < 50:
-            klines, endTime = call_orderbookticker_api(symbol = symbol,
-                                       endTime = endTime)
-            df = pd.concat([df, klines]).reset_index(drop = True)
-            i+=1
-        df.to_csv(f"{output_path}/{symbol}.csv")
+        while i < 2000:
+            try:
+                klines, endTime = call_orderbookticker_api(symbol = symbol,
+                                        endTime = endTime)
+                df = pd.concat([df, klines]).reset_index(drop = True)
+                i+=1
+            except:
+                time.sleep(1)
+        df.to_csv(f"{output_path}/{symbol}.csv", index = False)
     print()
       
 if __name__ == "__main__":
