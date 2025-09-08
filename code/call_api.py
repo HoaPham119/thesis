@@ -3,7 +3,8 @@ import json, os
 import time
 from datetime import datetime
 import pandas as pd
-output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg/500"
+# output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg/500"
+output_path = r"C:\Users\phamhoa\Downloads\thesis\data\Binance\agg\500"
 
 if not os.path.exists(output_path):
     os.makedirs(output_path)
@@ -40,7 +41,8 @@ def get_candledstick_data():
     for symbol in symbol_list:
         endTime = None
         i = 0
-        df = pd.DataFrame()
+        # df = pd.DataFrame()
+        df = pd.read_csv(f"{output_path}/{symbol}.csv")
         while i < 50:
             klines, endTime = call_candlestick_api(symbol = symbol,
                                        endTime = endTime)
@@ -74,9 +76,10 @@ def get_orderbookticker_data():
         "BNBUSDT",
     ]
     for symbol in symbol_list:
-        endTime = None
+        endTime = 1756475530549 - 1
         i = 0
-        df = pd.DataFrame()
+        # df = pd.DataFrame()
+        df = pd.read_csv(f"{output_path}/{symbol}.csv")
         while i < 2000:
             try:
                 klines, endTime = call_orderbookticker_api(symbol = symbol,
