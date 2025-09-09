@@ -27,3 +27,7 @@ Bạn có thể bắt đầu quá trình phân tích dữ liệu bằng cách m�
   data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/my_file.txt")
   ```
 
+
+.\env\Scripts\Activate
+Set-ExecutionPolicy Unrestricted -Scope Process
+.\env\Scripts\Activate
