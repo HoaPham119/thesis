@@ -3,9 +3,9 @@ import json
 import websockets
 import pandas as pd
 
-symbols = ["BNBUSDT"] 
+symbols = "BNBUSDT"
 raw_cols = ["a", "p", "q", "f", "l", "T", "m", "M"]
-stream_names = "/".join(f"{s.lower()}@aggTrade" for s in symbols)
+stream_names = f"{symbols.lower()}@aggTrade"
 
 WS_COMBINED = f"wss://stream.binance.com:9443/stream?streams={stream_names}"
 

@@ -3,6 +3,9 @@ import numpy as np
 from pathlib import Path
 import os
 from scipy.stats import skew, kurtosis
+import asyncio
+import json
+import websockets
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -192,6 +195,27 @@ class BinanceWrap:
         data['MASign'] = np.where(data['MA_20'] > data['MA_50'], 1, -1)
         return data
 
+class BinanceStream(BinanceWrap):
+    def __init__(self, file_path, symbol="BNBUSDT", window=50, h=50, ma_short_window=20, ma_long_window=50):
+        super().__init__(file_path, symbol, window, h, ma_short_window, ma_long_window)
+        self.symbol = symbol
+        raw_cols = ["a", "p", "q", "f", "l", "T", "m", "M"]
+        stream_names = f"{self.symbol.lower()}@aggTrade"
+        self.WS_COMBINED = f"wss://stream.binance.com:9443/stream?streams={stream_names}"
+
+        async def handle_combined(msg, df):
+            data = msg.get("data", {})
+            data = {k: data[k] for k in raw_cols}
+            print(data)
+            df = pd.concat([df, pd.DataFrame([data])], ignore_index=True)
+            return df
+
+        async def run():
+            df = pd.DataFrame(columns=raw_cols)
+            async with websockets.connect(self.WS_COMBINED, ping_interval=20) as ws:
+                async for raw in ws:
+                    msg = json.loads(raw)
+                    df = await handle_combined(msg, df)
 
 if __name__ == "__main__":
     symbol = "BNBUSDT"
