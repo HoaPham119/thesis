@@ -71,8 +71,8 @@ def get_orderbookticker_data():
     # symbols_df = pd.read_csv("symbol.csv")
     # symbol_list = symbols_df["symbol"].to_list()[:25]
     symbol_list = [
-        # "BTCUSDT",
-        "ETHUSDT",
+        "BTCUSDT",
+        # "ETHUSDT",
         # "BNBUSDT",
     ]
     for symbol in symbol_list:
