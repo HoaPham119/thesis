@@ -72,15 +72,18 @@ def get_orderbookticker_data():
     # symbol_list = symbols_df["symbol"].to_list()[:25]
     symbol_list = [
         # "BTCUSDT",
-        # "ETHUSDT",
-        "BNBUSDT",
+        "ETHUSDT",
+        # "BNBUSDT",
     ]
     for symbol in symbol_list:
-        endTime = 1756475530549 - 1
         i = 0
-        # df = pd.DataFrame()
-        df = pd.read_csv(f"{output_path}/{symbol}.csv")
-        while i < 2000:
+        try:
+            df = pd.read_csv(f"{output_path}/{symbol}.csv")
+            endTime = df["T"].min() - 1
+        except:
+            endTime = None
+            df = pd.DataFrame()
+        while i < 4000:
             try:
                 klines, endTime = call_orderbookticker_api(symbol = symbol,
                                         endTime = endTime)
