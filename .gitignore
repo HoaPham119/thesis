@@ -74,3 +74,8 @@ models/
 plots/
 RL_data/
 key.yaml
+Luận_Văn_Thạc_Sỹ/
+*.aux
+*.idx
+*.log
+*.out
