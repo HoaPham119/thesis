@@ -3,8 +3,8 @@ import json, os
 import time
 from datetime import datetime
 import pandas as pd
-# output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg/500"
-output_path = r"C:\Users\phamhoa\Downloads\thesis\data\Binance\agg\500"
+output_path = "/Users/hoapham/Documents/Learning/thesis/data/Binance/agg/500"
+# output_path = r"C:\Users\phamhoa\Downloads\thesis\data\Binance\agg\500"
 
 if not os.path.exists(output_path):
     os.makedirs(output_path)
@@ -51,7 +51,7 @@ def get_candledstick_data():
         df.to_csv(f"{output_path}/{symbol}.csv")
     print()
     
-def call_orderbookticker_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1000, endTime = None):
+def call_orderbookticker_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1000, endTime = None, startTime = None):
     # Gọi API Binance
     url = 'https://api.binance.com/api/v3/aggTrades'
     params = {
@@ -60,39 +60,49 @@ def call_orderbookticker_api(symbol: str = "BTCUSDT", interval = "1m", limit = 1
         }   
     if endTime is not None:
        params["endTime"] =  endTime
-
+    if startTime is not None:
+       params["startTime"] =  startTime
     response = requests.get(url, params=params)
     klines = response.json()
     klines = pd.DataFrame(klines)
     endTime = klines["T"].to_list()[0]-1
-    return  klines, endTime 
+    startTime = klines["T"].to_list()[-1]+1
+    return  klines, startTime, endTime
 
+
+current_ts_ms = int(time.time() * 1000)
 def get_orderbookticker_data():
     # symbols_df = pd.read_csv("symbol.csv")
     # symbol_list = symbols_df["symbol"].to_list()[:25]
     symbol_list = [
-        "BTCUSDT",
-        # "ETHUSDT",
+        # "BTCUSDT",
+        "ETHUSDT",
         # "BNBUSDT",
     ]
     for symbol in symbol_list:
+        endTime = 0
         i = 0
         try:
             df = pd.read_csv(f"{output_path}/{symbol}.csv")
-            endTime = df["T"].min() - 1
+            startTime = df["T"].max() + 1
         except:
-            endTime = None
+            # startTime = None
+            startTime = 1759881600000
             df = pd.DataFrame()
-        while i < 4000:
+        while endTime < current_ts_ms:
             try:
-                klines, endTime = call_orderbookticker_api(symbol = symbol,
-                                        endTime = endTime)
+
+                klines, startTime, endTime = call_orderbookticker_api(symbol = symbol,
+                                        startTime = startTime)
+
                 df = pd.concat([df, klines]).reset_index(drop = True)
+                if i%100 == 0:
+                    df.to_csv(f"{output_path}/{symbol}.csv", index = False)
                 i+=1
             except:
                 time.sleep(1)
         df.to_csv(f"{output_path}/{symbol}.csv", index = False)
+
     print()
-      
 if __name__ == "__main__":
     get_orderbookticker_data()
